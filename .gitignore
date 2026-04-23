@@ -1,0 +1,23 @@
+# Logs
+*.log
+webhook_log.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+chrome_bot_profile_*/
+
+# PHP / Assets
+php_system/evidence/*
+!php_system/evidence/.gitkeep
+php_system/api/evidence/*
+!php_system/api/evidence/.gitkeep
+
+# Sensitive data
+config.php
+php_system/config.php
+
+# OS files
+.DS_Store
+Thumbs.db
