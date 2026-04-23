@@ -14,9 +14,9 @@ php_system/evidence/*
 php_system/api/evidence/*
 !php_system/api/evidence/.gitkeep
 
-# Sensitive data
-config.php
-php_system/config.php
+# Sensitive data (Allowed by user)
+# config.php
+# php_system/config.php
 
 # OS files
 .DS_Store
