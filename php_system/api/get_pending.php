@@ -40,7 +40,7 @@ try {
         WHERE status = 'processing'
           AND requires_human = 0
           AND checkout_clicked = 0
-          AND locked_at < NOW() - INTERVAL 15 MINUTE
+          AND locked_at < NOW() - INTERVAL 10 MINUTE
     ");
     $resetStmt->execute();
     $resetCount = $resetStmt->rowCount();
@@ -54,7 +54,7 @@ try {
         SET status = 'stuck', requires_human = 1
         WHERE status = 'processing'
           AND checkout_clicked = 1
-          AND locked_at < NOW() - INTERVAL 15 MINUTE
+          AND locked_at < NOW() - INTERVAL 10 MINUTE
     ");
     $stuckStmt->execute();
     $stuckCount = $stuckStmt->rowCount();

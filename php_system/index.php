@@ -413,8 +413,17 @@ if (isset($_GET['action'])) {
             exit;
         }
         $pdo->exec("UPDATE bot_workers SET status='offline'
-                    WHERE last_heartbeat < NOW()-INTERVAL 15 SECOND
+                    WHERE last_heartbeat < NOW()-INTERVAL 60 SECOND
                       AND status NOT IN ('offline','paused')");
+                      
+        // سحب الطلبات العالقة مع بوتات فقدت الاتصال (لأكثر من دقيقتين) - Safe version
+        try {
+            $offline_bots = $pdo->query("SELECT bot_id FROM bot_workers WHERE last_heartbeat < NOW()-INTERVAL 120 SECOND")->fetchAll(PDO::FETCH_COLUMN);
+            if (!empty($offline_bots)) {
+                $in_clause = implode(',', array_fill(0, count($offline_bots), '?'));
+                $pdo->prepare("UPDATE orders SET status='manual_review', requires_human=1, fail_reason='[SYSTEM] البوت فقد الاتصال' WHERE status='processing' AND bot_assigned IN ($in_clause)")->execute($offline_bots);
+            }
+        } catch(Exception $e) {}
         $bots = $pdo->query("
             SELECT b.*, a.email razer_email, a.balance_status acct_balance,
                    TIMESTAMPDIFF(SECOND, b.last_heartbeat, NOW()) secs_since_hb,
@@ -424,7 +433,7 @@ if (isset($_GET['action'])) {
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $orders = $pdo->query("
-            SELECT id, player_id, diamonds, status, bot_assigned, checkout_clicked,
+            SELECT id, woo_order_id, player_id, diamonds, status, bot_assigned, checkout_clicked,
                    requires_human, financial_risk, created_at, dispatched_at,
                    updated_at, fail_reason, evidence_path,
                    TIMESTAMPDIFF(SECOND, IFNULL(dispatched_at,created_at), NOW()) elapsed
@@ -455,14 +464,29 @@ if (isset($_GET['action'])) {
             FROM bot_action_logs ORDER BY created_at DESC LIMIT 60
         ")->fetchAll(PDO::FETCH_ASSOC);
 
-        $insuf = array_column(
-            array_filter($bots, fn($b)=>($b['acct_balance']??'')==='insufficient'),
-            'bot_id'
-        );
+        $insuf = array();
+        foreach ($bots as $b) {
+            if ((isset($b['acct_balance']) && $b['acct_balance'] === 'insufficient') ||
+                (isset($b['balance_status']) && $b['balance_status'] === 'insufficient')) {
+                $insuf[] = $b['bot_id'];
+            }
+        }
+
+        $low_bots = array();
+        $error_paused = array();
+        foreach ($bots as $b) {
+            if ((isset($b['acct_balance']) && $b['acct_balance'] === 'low') || 
+                (isset($b['balance_status']) && $b['balance_status'] === 'low')) {
+                $low_bots[] = $b['bot_id'];
+            }
+            if (isset($b['status']) && $b['status'] === 'error_paused') {
+                $error_paused[] = $b['bot_id'];
+            }
+        }
 
         echo json_encode([
             'bots'=>$bots, 'orders'=>$orders, 'today'=>$today, 'risk'=>$risk,
-            'insufficient_bots'=>$insuf, 'logs'=>$logs,
+            'insufficient_bots'=>$insuf, 'low_active_bots'=>$low_bots, 'error_paused_bots'=>$error_paused, 'logs'=>$logs,
             'server_time'=>date('Y-m-d H:i:s')
         ]);
         exit;
@@ -497,7 +521,8 @@ if (isset($_GET['action'])) {
             $sql = "UPDATE razer_accounts SET label=?,email=?,otp_secret=?,bot_id=?,notes=?,is_active=?";
             $p   = [$label,$email,$otp,$bot,$notes,$act_];
             if ($pass) { $sql .= ',password=?'; $p[] = $pass; }
-            $pdo->prepare($sql.' WHERE id=?')->execute([...$p, $id]);
+            $p[] = $id;
+            $pdo->prepare($sql.' WHERE id=?')->execute($p);
         } else {
             if (!$pass) { echo json_encode(['success'=>false,'error'=>'password required']); exit; }
             $pdo->prepare("INSERT INTO razer_accounts(label,email,password,otp_secret,bot_id,notes,is_active)VALUES(?,?,?,?,?,?,?)")
@@ -514,8 +539,19 @@ if (isset($_GET['action'])) {
     // ── Bots ─────────────────────────────────────────────────────
     if ($act === 'bot_command') {
         $cmd = $d['command'] ?? '';
+        $bid = $d['bot_id'] ?? '';
         if (!in_array($cmd, ['pause','resume'])) { echo json_encode(['success'=>false,'error'=>'invalid command']); exit; }
-        $pdo->prepare("UPDATE bot_workers SET pending_command=? WHERE bot_id=?")->execute([$cmd, $d['bot_id']??'']);
+        
+        $pdo->prepare("UPDATE bot_workers SET pending_command=? WHERE bot_id=?")->execute([$cmd, $bid]);
+        
+        if ($cmd === 'pause') {
+            try {
+                // سحب الطلب الجاري فوراً للمراجعة اليدوية لضمان عدم بقائه عالقاً
+                $pdo->prepare("UPDATE orders SET status='manual_review', requires_human=1, fail_reason='[SYSTEM] تم إيقاف البوت يدوياً' 
+                               WHERE bot_assigned=? AND status='processing'")->execute([$bid]);
+            } catch(Exception $e) {}
+        }
+        
         echo json_encode(['success'=>true]); exit;
     }
 
@@ -570,6 +606,13 @@ if (isset($_GET['action'])) {
         if ($cmd === 'reset_pending') {
             $pdo->prepare("UPDATE orders SET status='pending',locked_by=NULL,locked_at=NULL,
                            bot_assigned=NULL,checkout_clicked=0,requires_human=0,financial_risk='none'
+                           WHERE id=? AND status!='completed'")->execute([$oid]);
+            echo json_encode(['success'=>true]); exit;
+        }
+
+        if ($cmd === 'withdraw_to_review') {
+            $pdo->prepare("UPDATE orders SET status='manual_review',requires_human=1,locked_by=NULL,locked_at=NULL,
+                           bot_assigned=NULL,checkout_clicked=0,fail_reason='[ADMIN] تم سحب الطلب يدوياً للمراجعة'
                            WHERE id=? AND status!='completed'")->execute([$oid]);
             echo json_encode(['success'=>true]); exit;
         }
@@ -832,15 +875,59 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .bal-insufficient{background:var(--rg);color:var(--rl)}
 .bal-unknown{background:rgba(139,148,158,.1);color:var(--text3)}
 
-/* SYSTEM ONLINE DOT */
-.sys-status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-
-/* UTILS */
-.green{color:var(--gl)}.amber{color:var(--al)}.red{color:var(--rl)}
-.bold{font-weight:600}
+<style>
+/* CRITICAL ALERTS */
+.critical-alerts {
+  display: none;
+  background: #da3633;
+  color: #fff;
+  padding: 12px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 14px;
+  animation: alertFlash 1s infinite;
+  z-index: 999;
+  position: sticky;
+  top: 0;
+  border-bottom: 2px solid #fff;
+}
+@keyframes alertFlash {
+  0% { background: #da3633; }
+  50% { background: #9c1c1c; }
+  100% { background: #da3633; }
+}
+/* WARNING ALERTS */
+.warning-alerts {
+  display: none;
+  background: #d4a017;
+  color: #fff;
+  padding: 12px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 14px;
+  animation: warnFlash 1.5s infinite;
+  z-index: 999;
+  position: sticky;
+  top: 0;
+  border-bottom: 2px solid #fff;
+}
+@keyframes warnFlash {
+  0% { background: #d4a017; }
+  50% { background: #9c7512; }
+  100% { background: #d4a017; }
+}
+.alert-icon { font-size: 20px; margin: 0 10px; vertical-align: middle; }
 </style>
 </head>
 <body>
+
+<div id="critical-alert-bar" class="critical-alerts">
+    <span class="alert-icon">⚠</span> 
+    <span id="alert-text">تنبيه: الرصيد منتهٍ في بعض البوتات!</span> 
+    <span class="alert-icon">⚠</span>
+</div>
+
+<audio id="alert-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
 
 <!-- NAV -->
 <nav>
@@ -1051,13 +1138,14 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
-let dashData = {bots:[], orders:[], today:{}, risk:{}, logs:[], insufficient_bots:[]};
+let dashData = {bots:[],orders:[],logs:[],today:{},risk:{},insufficient_bots:[]};
 let systems  = [];
 let selSys   = 1;
+let pollTimer= null;
 let sortCol  = 'id';
 let sortDir  = -1;
-let pollTimer;
 let currentFCId = null;
+let lastAlertedBots = [];
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -1159,8 +1247,60 @@ function renderAll() {
     renderManualReview();
     renderArchive();
     renderLogs();
+    checkAlerts();
   } catch(e) { console.error('Render error:', e); }
 }
+
+function checkAlerts() {
+  const bar = document.getElementById('critical-alert-bar');
+  const sound = document.getElementById('alert-sound');
+  const insufficient = dashData.insufficient_bots || [];
+  const lowBots = dashData.low_active_bots || [];
+  const errorBots = dashData.error_paused_bots || [];
+  
+  let msg = [];
+  let isCritical = false;
+  let currentAlerts = [];
+  
+  if (insufficient.length > 0) {
+    msg.push('رصيد منتهٍ: ' + insufficient.join(', '));
+    isCritical = true;
+    insufficient.forEach(id => currentAlerts.push('crit_'+id));
+  }
+  
+  if (errorBots.length > 0) {
+    msg.push('توقف إجباري (أخطاء): ' + errorBots.join(', '));
+    isCritical = true;
+    errorBots.forEach(id => currentAlerts.push('err_'+id));
+  }
+  
+  if (lowBots.length > 0) {
+    msg.push('رصيد منخفض: ' + lowBots.join(', '));
+    lowBots.forEach(id => currentAlerts.push('warn_'+id));
+  }
+  
+  if (msg.length > 0) {
+    if (bar) {
+      bar.style.display = 'block';
+      bar.className = isCritical ? 'critical-alerts' : 'warning-alerts';
+    }
+    const textEl = document.getElementById('alert-text');
+    if (textEl) textEl.textContent = 'تنبيه: ' + msg.join(' | ');
+    
+    const newBots = currentAlerts.filter(id => !lastAlertedBots.includes(id));
+    if (newBots.length > 0) {
+      if (sound) {
+        sound.currentTime = 0;
+        sound.play().catch(e => console.log("Audio play blocked:", e));
+      }
+      lastAlertedBots = currentAlerts.slice();
+    }
+  } else {
+    if (bar) bar.style.display = 'none';
+    lastAlertedBots = [];
+  }
+}
+
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 function renderStats() {
@@ -1188,7 +1328,7 @@ function renderBots() {
 }
 
 function botCard(b) {
-  const stMap = {online:'ONLINE',busy:'BUSY',offline:'OFFLINE',paused:'PAUSED',draining:'DRAINING'};
+  const stMap = {online:'ONLINE',busy:'BUSY',offline:'OFFLINE',paused:'PAUSED',error_paused:'توقف لأخطاء',draining:'DRAINING'};
   const stLbl = stMap[b.status] || b.status.toUpperCase();
   const stCls = 'bot-st-' + (b.status||'offline');
   const sr    = parseFloat(b.success_rate||100).toFixed(1);
@@ -1212,8 +1352,8 @@ function botCard(b) {
     </div>
     ${b.pending_command?`<div class="bot-pending">جاري مزامنة: ${b.pending_command.toUpperCase()}</div>`:''}
     <div class="bot-foot">
-      ${b.status==='paused'
-        ? `<button class="btn btn-sm btn-green" onclick="botCmd('${b.bot_id}','resume')">استئناف</button>`
+      ${b.status==='paused' || b.status==='error_paused'
+        ? `<button class="btn btn-sm btn-green" onclick="botCmd('${b.bot_id}','resume')">استئناف العمل</button>`
         : b.status==='offline' ? `<button class="btn btn-sm btn-ghost" disabled style="opacity:0.5;cursor:not-allowed;">اوفلاين</button>`
         : `<button class="btn btn-sm btn-amber" onclick="botCmd('${b.bot_id}','pause')">ايقاف</button>`}
     </div>
@@ -1256,9 +1396,9 @@ function renderOrders() {
     const el  = +(o.elapsed||0);
     const elC = el > 600 ? 'red' : el > 300 ? 'amber' : '';
     const ss  = o.evidence_path
-      ? `<button class="btn btn-xs btn-ghost" onclick="viewSS('${esc(o.evidence_path)}')">صورة</button>` : '';
+      ? `<button class="btn btn-xs btn-ghost" onclick="viewSS('${esc(o.evidence_path.split('/').pop())}')">صورة</button>` : '';
     return `<tr class="tr-${o.status}">
-      <td class="mono">#${o.id}</td>
+      <td class="mono">#${o.id} ${o.woo_order_id ? `<br><span style="font-size:10px;color:var(--text3)">(Woo: #${o.woo_order_id})</span>` : ''}</td>
       <td class="mono bold">${esc(o.player_id)}</td>
       <td class="mono">${esc(o.diamonds)}</td>
       <td><span class="pill p-${o.status}">${stLbl(o.status)}</span></td>
@@ -1275,6 +1415,8 @@ function orderBtns(o) {
     b.push(`<button class="btn btn-xs btn-ghost" onclick="openFC(${o.id})">اكمال</button>`);
   if (['failed','stuck','manual_review'].includes(o.status))
     b.push(`<button class="btn btn-xs btn-ghost" onclick="orderAction(${o.id},'reset_pending')">اعادة</button>`);
+    if (o.status === 'processing')
+    b.push(`<button class="btn btn-xs btn-ghost" style="color:var(--amber)" onclick="orderAction(${o.id},'withdraw_to_review')">سحب من البوت</button>`);
   if (o.status==='pending'||(o.status==='processing'&&!+o.checkout_clicked))
     b.push(`<button class="btn btn-xs btn-red-ghost" onclick="orderAction(${o.id},'force_failed')">الغاء</button>`);
   return b.join('');
@@ -1312,7 +1454,7 @@ function renderManualReview() {
   list.innerHTML = orders.map(o => {
     const stC  = {manual_review:'badge-purple',stuck:'badge-red',failed:'badge-offline'}[o.status]||'badge-offline';
     const thumb = o.evidence_path
-      ? `<img class="review-thumb" src="${esc(o.evidence_path)}" alt="ss" onclick="viewSS('${esc(o.evidence_path)}')" onerror="this.style.display='none'">`
+      ? `<img class="review-thumb" src="view_evidence.php?file=${esc(o.evidence_path.split('/').pop())}" alt="ss" onclick="viewSS('${esc(o.evidence_path.split('/').pop())}')" onerror="this.style.display='none'">`
       : '';
     return `<div class="rcard">
       <div class="rcard-top">
@@ -1349,7 +1491,7 @@ function renderArchive() {
   list.innerHTML = orders.map(o => {
     const stC  = o.status === 'completed' ? 'badge-online' : 'badge-offline';
     const thumb = o.evidence_path
-      ? `<img class="review-thumb" src="${esc(o.evidence_path)}" alt="ss" onclick="viewSS('${esc(o.evidence_path)}')" onerror="this.style.display='none'">`
+      ? `<img class="review-thumb" src="view_evidence.php?file=${esc(o.evidence_path.split('/').pop())}" alt="ss" onclick="viewSS('${esc(o.evidence_path.split('/').pop())}')" onerror="this.style.display='none'">`
       : '';
     return `<div class="rcard" style="opacity:0.85">
       <div class="rcard-top">
@@ -1563,8 +1705,8 @@ async function doEmergencyStop() {
 }
 
 // ── Screenshot ────────────────────────────────────────────────────────────────
-function viewSS(path) {
-  document.getElementById('ss-img').src = path;
+function viewSS(filename) {
+  document.getElementById('ss-img').src = 'view_evidence.php?file=' + encodeURIComponent(filename);
   document.getElementById('ss-overlay').style.display = 'flex';
 }
 

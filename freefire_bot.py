@@ -5,7 +5,7 @@ freefire_bot.py — Multi-Instance Bot Worker
 مثال:  python freefire_bot.py bot_1 5000
        python freefire_bot.py bot_2 5001
 """
-import sys, io, time, requests, pyotp, os, base64, threading, signal, queue, hashlib, json
+import sys, io, time, requests, pyotp, os, base64, threading, signal, queue, hashlib, json, re
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
@@ -64,6 +64,12 @@ processed_ids     = set()   # Layer 3: in-memory dedup
 pause_event = threading.Event()   # عند تفعيله يعني "أوقف الطلب الحالي"
 abort_event = threading.Event()   # عند تفعيله يعني "تم الإلغاء يدوياً"
 
+class AbortOrderException(Exception): pass
+
+def check_abort():
+    if abort_event.is_set():
+        raise AbortOrderException("تم إلغاء/إكمال الطلب من اللوحة")
+
 # ─── جلب بيانات حساب ريزر من السيرفر ──────────────────────────────────────
 def fetch_credentials():
     global EMAIL, PASSWORD, OTP_SECRET
@@ -95,7 +101,7 @@ def fetch_credentials():
 
 # ─── إرسال Heartbeat كل 60 ثانية ──────────────────────────────────────────
 def heartbeat_loop():
-    global bot_status, bot_paused, bot_draining
+    global bot_status, bot_paused, bot_draining, consecutive_failures, orders_today, success_count, fail_count, bot_balance_status, current_processing_order_id
     while True:
         try:
             session_age = int((time.time() - session_start_time) / 60)
@@ -138,6 +144,9 @@ def heartbeat_loop():
                 elif cmd == 'resume':
                     bot_paused   = False
                     bot_draining = False
+                    if bot_status == 'error_paused':
+                        bot_status = 'online'
+                        consecutive_failures = 0
                     pause_event.clear()  # امسح إشارة الإيقاف للسماح بالعمل مجدداً
                     print(f"[{BOT_ID}] ▶  تم استقبال أمر RESUME")
                 elif cmd == 'restart':
@@ -149,7 +158,7 @@ def heartbeat_loop():
                     print(f"[{BOT_ID}] 🛑 تم تغيير حالة الطلب خارجياً (إلغاء/إعادة)! جاري التخطي...")
 
         except Exception as e:
-            pass
+            print(f"[{BOT_ID}] ✗ Heartbeat Error: {e}")
         time.sleep(3)
 
 # ─── تسجيل حدث في السيرفر ──────────────────────────────────────────────────
@@ -232,9 +241,10 @@ def update_order_status(order_id, status, fail_reason="", evidence_base64="",
     return False
 
 # ─── OTP ────────────────────────────────────────────────────────────────────
-def wait_for_otp(page, timeout_ms=35000):
+def wait_for_otp(page, timeout_ms=15000):
     deadline = time.time() + timeout_ms / 1000
     while time.time() < deadline:
+        check_abort()
         try:
             if page.is_visible('#otp-input-0'):
                 return 'page'
@@ -371,7 +381,7 @@ def get_diamond_label(amount):
 
 # ─── معالجة الطلب ───────────────────────────────────────────────────────────
 def process_order(page, context, player_id, diamonds, order_id):
-    global bot_status, bot_balance_status, consecutive_failures
+    global bot_status, bot_balance_status, consecutive_failures, bot_paused
 
     max_retries     = 2
     checkout_clicked_flag = False
@@ -395,7 +405,7 @@ def process_order(page, context, player_id, diamonds, order_id):
         try:
             bot_status = "busy"
             if page.url.split('?')[0] != TOPUP_URL:
-                page.goto(TOPUP_URL, timeout=30000, wait_until="commit")
+                page.goto(TOPUP_URL, timeout=15000, wait_until="commit")
 
             try:
                 page.click('[data-cky-tag="accept-button"]', timeout=500)
@@ -420,7 +430,7 @@ def process_order(page, context, player_id, diamonds, order_id):
                 page.wait_for_selector(
                     "input[id^='gameUserId'], input[name='playerID'], "
                     "input[placeholder*='Player ID'], input[placeholder*='Game User ID']",
-                    timeout=12000
+                    timeout=6000
                 )
                 loc = page.locator(
                     "input[id^='gameUserId'], input[name='playerID'], "
@@ -447,6 +457,23 @@ def process_order(page, context, player_id, diamonds, order_id):
                 if actual_id != player_id.strip():
                     log_action(order_id, "Player ID Mismatch", f"{actual_id} ≠ {player_id}")
                     return False, f"حماية! الأيدي ({actual_id}) ≠ المطلوب ({player_id})", "", False
+            except:
+                pass
+
+            # التحقق الفوري من رسالة الخطأ للأيدي
+            try:
+                for _ in range(10):
+                    check_abort()
+                    outcome = page.evaluate("""() => {
+                        let text = document.body.innerText.toLowerCase();
+                        if (text.includes('invalid username') || text.includes('user not found') || text.includes('invalid player id') || text.includes('invalid format')) return 'invalid';
+                        return 'ok';
+                    }""")
+                    if outcome == 'invalid':
+                        log_action(order_id, "Invalid Player ID detected", "Razer showed invalid ID error before checkout")
+                        print(f"    [!] الأيدي غير صحيح أو غير موجود!")
+                        return False, "الأيدي غير صحيح (Invalid Username/account)", "", False
+                    time.sleep(0.3)
             except:
                 pass
 
@@ -502,47 +529,62 @@ def process_order(page, context, player_id, diamonds, order_id):
             try:
                 bal_el = page.locator('[data-cs-override-id="navigation-gold-amount"], .gold-amount, .balance-amount').first
                 if bal_el.is_visible(timeout=2000):
-                    pre_balance = bal_el.inner_text().strip()
-                    print(f"    [INFO] الرصيد قبل الدفع: {pre_balance}")
-                    log_action(order_id, "Pre-checkout balance", pre_balance)
+                    raw_text = bal_el.inner_text().strip()
+                    nums = re.findall(r'[\d\.]+', raw_text.replace(',', ''))
+                    if nums:
+                        pre_balance = nums[-1]
+                        print(f"    [INFO] الرصيد قبل الدفع: {pre_balance} (من النص: {raw_text})")
+                        log_action(order_id, "Pre-checkout balance", pre_balance)
             except:
                 pass
 
             try:
-                btn = page.wait_for_selector(
-                    '[data-cs-override-id="purchase-webshop-checkout-btn"]',
-                    timeout=5000
-                )
-                if btn:
-                    btn_text = btn.inner_text().upper()
-                    if "RELOAD" in btn_text:
+                # فحص محتوى الزر بدقة قبل البدء في أي انتظار
+                btn_el = page.locator('[data-cs-override-id="purchase-webshop-checkout-btn"]').first
+                if btn_el.is_visible(timeout=5000):
+                    txt = btn_el.inner_text().upper()
+                    if "RELOAD" in txt or "GET GOLD" in txt or "شحن" in txt:
                         bot_balance_status = "insufficient"
-                        log_action(order_id, "Checkout check", "INSUFFICIENT BALANCE — RELOAD TO CHECKOUT")
-                        print(f"    [!!!] رصيد غير كافٍ! RELOAD TO CHECKOUT")
-                        return (False,
-                                "🔴 رصيد ريزر غير كافٍ! (RELOAD TO CHECKOUT)",
-                                "",
-                                False,
-                                "critical")
+                        bot_paused = True # إيقاف البوت ذاتياً لمنع تكرار الفشل
+                        log_action(order_id, "Checkout check", f"INSUFFICIENT BALANCE — Button text: {txt}")
+                        print(f"    [!!!] رصيد غير كافٍ! ({txt}) — تم إيقاف البوت تلقائياً")
+                        return (False, "🔴 رصيد ريزر غير كافٍ! (الرصيد أقل من سعر الباقة)", "", False, "critical")
             except:
                 pass
 
-            for _ in range(25):
-                status = page.evaluate("""() => {
-                    let text = document.body.innerText.toLowerCase();
-                    if (text.includes('invalid username') || text.includes('user not found') || text.includes('invalid player id')) {
-                        return 'invalid';
+            # حلقة انتظار ذكية للزر مع فحص النص في كل مرة
+            for _ in range(30):
+                res = page.evaluate("""() => {
+                    let text = document.body.innerText.toUpperCase();
+                    // فحص شامل لكل الصفحة عن كلمات تدل على نقص الرصيد
+                    if (text.includes('RELOAD TO CHECKOUT') || text.includes('GET GOLD') || text.includes('INSUFFICIENT BALANCE') || text.includes('رصيد غير كاف')) {
+                        return 'insufficient';
                     }
+                    
                     let btn = document.querySelector('[data-cs-override-id="purchase-webshop-checkout-btn"]');
+                    if (!btn) return 'not_found';
+                    let txt = btn.innerText.toUpperCase();
+                    if (txt.includes('RELOAD') || txt.includes('GET GOLD') || txt.includes('شحن')) return 'insufficient';
+                    
+                    if (text.includes('INVALID USERNAME') || text.includes('USER NOT FOUND') || text.includes('INVALID PLAYER ID')) {
+                        return 'invalid_id';
+                    }
+                    
                     return (btn && !btn.disabled && !btn.classList.contains('btn--disabled')) ? 'enabled' : 'disabled';
                 }""")
-                if status == 'invalid':
-                    log_action(order_id, "Invalid Player ID detected", "Razer showed invalid ID error before checkout")
-                    print(f"    [!] الأيدي غير صحيح أو غير موجود!")
-                    return False, "الأيدي غير صحيح (Invalid Username/account)", "", False
-                if status == 'enabled':
+                
+                if res == 'insufficient':
+                    bot_balance_status = "insufficient"
+                    bot_paused = True
+                    log_action(order_id, "Balance Check", "Detected INSUFFICIENT via Global Scan")
+                    return (False, "🔴 رصيد غير كافٍ (تم اكتشافه بمسح الصفحة)", "", False, "critical")
+                
+                if res == 'invalid_id':
+                    return (False, "الأيدي غير صحيح (Invalid Username/account)", "", False)
+
+                if res == 'enabled':
                     break
-                time.sleep(0.1)
+                time.sleep(0.3)
 
             # التحقق النهائي من الأيدي قبل الدفع
             try:
@@ -587,6 +629,7 @@ def process_order(page, context, player_id, diamonds, order_id):
             try:
                 outcome = "none"
                 for _ in range(30):
+                    check_abort()
                     outcome = page.evaluate("""() => {
                         let text = document.body.innerText.toLowerCase();
                         if (text.includes('invalid username') || text.includes('user not found') || text.includes('invalid player id')) {
@@ -632,8 +675,9 @@ def process_order(page, context, player_id, diamonds, order_id):
 
             # ─── خطوة 6: انتظار النتيجة ──────────────────────────────────
             log_action(order_id, "Waiting for payment result")
-            deadline = time.time() + 90
+            deadline = time.time() + 60
             while time.time() < deadline:
+                check_abort()
                 current_url = page.url.lower()
                 if "receipt" in current_url or "success" in current_url or "confirmation" in current_url or "thank-you" in current_url:
                     break
@@ -701,7 +745,14 @@ def process_order(page, context, player_id, diamonds, order_id):
             else:
                 return False, f"توقف الشحن — URL: {page.url[:100]}", b64_img, False
 
+        except AbortOrderException as ae:
+            raise ae
         except Exception as e:
+            is_timeout = 'TimeoutError' in str(type(e)) or 'Timeout' in str(e)
+            if is_timeout and not checkout_clicked_flag:
+                print(f"    [!] Fast-Fail: Timeout detected before checkout. Aborting retry.")
+                raise e
+
             b64_img = ""
             try:
                 b64_img = base64.b64encode(page.screenshot(full_page=True, timeout=5000)).decode('utf-8')
@@ -812,6 +863,12 @@ def main():
                 pause_event.clear()
                 print(f"\n[{BOT_ID}] ▶ استُؤنف البوت — استقبال الطلبات...")
 
+            # إذا كان البوت موقوفاً بسبب كثرة الأخطاء
+            if bot_status == 'error_paused':
+                print(f"!", end="", flush=True)
+                time.sleep(5)
+                continue
+
             # إذا كان في وضع Drain وانتهى الطلب الحالي
             if bot_draining and not current_processing_order_id:
                 print(f"[{BOT_ID}] Drain مكتمل — متوقف.")
@@ -882,24 +939,37 @@ def main():
                     result_msg = "⏸ تم الإيقاف يدوياً — يحتاج مراجعة"
                     checkout_done = False   # لم يُضغط Checkout → آمن للمراجعة
 
+            except AbortOrderException as ae:
+                result_msg = str(ae)
+                print(f"    [!] {result_msg}")
+                log_action(order_id, "Aborted", result_msg)
+                
             except BaseException as e:
                 is_kb_interrupt = isinstance(e, KeyboardInterrupt)
+                is_timeout = 'TimeoutError' in str(type(e)) or 'Timeout' in str(e)
+                
                 result_msg = f"Crash: {type(e).__name__}: {str(e)}"[:200]
                 if is_kb_interrupt:
                     result_msg = "انقطاع مفاجئ أو توقف إجباري للبوت"
+                elif is_timeout:
+                    result_msg = f"بطء في موقع ريزر جولد (Timeout). المحاولة: {attempt+1}"
                     
                 print(f"    [ERR] {result_msg}")
                 log_action(order_id, "Unhandled exception or Crash", result_msg)
                 
-                # احتياط أمني: exception غير متوقع بعد بدء المعالجة
-                # نعامله كـ manual_review
-                checkout_done  = True    # ← افترض الأسوأ لمنع الإعادة العشوائية
-                financial_risk = "high"
+                if checkout_done:
+                    financial_risk = "high"
+                
                 try:
                     result_img = base64.b64encode(page.screenshot(full_page=True, timeout=5000)).decode('utf-8')
                 except:
                     pass
-                if not is_kb_interrupt:
+                    
+                # Fast Fail Logic (توجيه للمراجعة اليدوية بدلاً من الطابور)
+                if is_timeout and not checkout_done:
+                    # المستخدم طلب: لا ترجع للطابور أبداً. أي تأخير يذهب للمراجعة.
+                    pass
+                elif not is_kb_interrupt:
                     try:
                         ensure_logged_in(page, context)
                     except:
@@ -935,12 +1005,12 @@ def main():
                     fail_count           += 1
                     consecutive_failures += 1
                     bot_balance_status    = "insufficient"
-                    update_order_status(order_id, 'failed', result_msg,
+                    update_order_status(order_id, 'manual_review', result_msg,
                                         evidence_base64=result_img,
                                         checkout_clicked=checkout_done,
                                         financial_risk="critical")
-                    log_action(order_id, "Order FAILED — Insufficient Balance", result_msg)
-                    print(f"    [!!!] رصيد غير كافٍ — تنبيه أُرسل!")
+                    log_action(order_id, "Order → MANUAL REVIEW (Insufficient Balance)", result_msg)
+                    print(f"    [!!!] رصيد غير كافٍ — تم التوجيه للمراجعة!")
                 elif financial_risk == "balance_changed":
                     # الرصيد تغير لكن ريزر لم تؤكد النجاح
                     # → مراجعة يدوية مع عدم إبلاغ العميل (يبقى "قيد المعالجة")
@@ -969,15 +1039,33 @@ def main():
                                         financial_risk="none")
                     log_action(order_id, "Order → MANUAL REVIEW (PAUSED)", result_msg)
                     print(f"    [⏸] الطلب {order_id} → manual_review (إيقاف يدوي)")
+                elif 'Timeout' in result_msg or 'بطء' in result_msg:
+                    # تم تحويل حالات البطء للمراجعة اليدوية بناءً على طلبك
+                    fail_count           += 1
+                    update_order_status(order_id, 'manual_review', result_msg,
+                                        evidence_base64=result_img,
+                                        checkout_clicked=False,
+                                        financial_risk="none")
+                    log_action(order_id, "Order → MANUAL REVIEW (TIMEOUT)", result_msg)
+                    print(f"    [⏳] الطلب {order_id} → manual_review (بسبب البطء/Timeout)")
                 else:
                     fail_count           += 1
                     consecutive_failures += 1
-                    update_order_status(order_id, 'failed', result_msg,
+                    update_order_status(order_id, 'manual_review', result_msg,
                                         evidence_base64=result_img,
                                         checkout_clicked=False,
-                                        financial_risk=financial_risk)
-                    log_action(order_id, "Order FAILED", result_msg)
-                    print(f"    [FAIL] الطلب {order_id} فشل: {result_msg[:60]}")
+                                        financial_risk="none")
+                    log_action(order_id, "Order → MANUAL REVIEW (UNKNOWN ERROR)", result_msg)
+                    print(f"    [FAIL] الطلب {order_id} فشل وتوجه للمراجعة: {result_msg[:60]}")
+
+                # ── إيقاف البوت إذا تكررت الأخطاء المجهولة المتتالية ──
+                if consecutive_failures > 2 and not bot_paused and bot_status != 'error_paused':
+                    bot_status = 'error_paused'
+                    bot_paused = True
+                    pause_event.set()
+                    print(f"\n[!!!] تم إيقاف البوت مؤقتاً لتجاوز الأخطاء المتتالية الحد المسموح (3 أخطاء)!")
+                    log_action("BOT_SYSTEM", "Auto-paused", f"3 consecutive unknown errors")
+
 
                 if consecutive_failures >= 3:
                     print(f"    [!!!] {consecutive_failures} فشل متتالي — يرجى الفحص!")

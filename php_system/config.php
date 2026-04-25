@@ -16,6 +16,13 @@ define('WOO_CONSUMER_SECRET', 'ضع_هنا_Consumer_Secret_الخاص_بمتجر
 define('API_SECRET_TOKEN', 'super_secret_token_123');
 define('ADMIN_PASSWORD',   'admin_2024_secure');   // ← غيّر هذا لكلمة سر قوية
 
+// ── مجلد حفظ صور الإثبات ──────────────────────────────────────────────────────
+// يتم حفظ الصور خارج public_html تماماً لمنع الوصول المباشر عبر المتصفح
+// dirname(DOCUMENT_ROOT) يعطي المجلد الأب لـ public_html
+define('EVIDENCE_DIR', dirname($_SERVER['DOCUMENT_ROOT']) . '/private_evidence');
+// إنشاء المجلد إن لم يكن موجوداً
+if (!file_exists(EVIDENCE_DIR)) @mkdir(EVIDENCE_DIR, 0750, true);
+
 // إعدادات اتصال السستم بالبوت (VPS Python)
 define('BOT_API_URL', 'http://127.0.0.1:5000'); // غير هذا إلى IP الـ VPS الخاص بالبوت
 define('BOT_API_TOKEN', 'bot_super_secret_123'); // كلمة سر للاتصال بالبوت لضمان الأمان

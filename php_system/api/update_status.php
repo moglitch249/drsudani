@@ -60,6 +60,15 @@ try {
         exit;
     }
 
+    // ── حماية من تعديات البوت المسحوب منه الطلب (Race Condition Vulnerability Fix) ──
+    $bot_id = isset($data['bot_id']) ? trim($data['bot_id']) : '';
+    if ($order['bot_assigned'] && $order['bot_assigned'] !== $bot_id && $status !== 'completed') {
+        $pdo->commit();
+        error_log("[SECURITY] Bot $bot_id tried to update order $id assigned to {$order['bot_assigned']}. Ignored.");
+        echo json_encode(array('success' => true, 'message' => 'Ignored. Order assigned to another bot or withdrawn.'));
+        exit;
+    }
+
     // ── حماية من Race Condition ──
     // إذا كان checkout_clicked=1 في قاعدة البيانات (من Checkpoint سابق)
     // لا نسمح بالتراجع عنه أبداً (لأن الـ Checkout فعلاً ضُغط)
@@ -93,18 +102,18 @@ try {
     $pdo->prepare($sql)->execute($params);
 
 
-    // 3. معالجة الإثبات (Base64)
+    // 3. معالجة الإثبات (Base64) — يُحفظ خارج public_html لمنع الوصول المباشر
     if (!empty($data['evidence'])) {
-        $evidence_dir = __DIR__ . '/evidence';
-        if (!file_exists($evidence_dir)) mkdir($evidence_dir, 0755, true);
+        $evidence_dir = EVIDENCE_DIR; // مجلد خارج public_html — محدد في config.php
+        if (!file_exists($evidence_dir)) mkdir($evidence_dir, 0750, true);
         $img_data = base64_decode($data['evidence']);
         if ($img_data) {
             $fname = "order_{$id}_" . time() . ".png";
             file_put_contents($evidence_dir . '/' . $fname, $img_data);
-            // حفظ مسار السكرين شوت في قاعدة البيانات
+            // نحفظ اسم الملف فقط — المسار الكامل سري ولا يُكشف للمتصفح
             try {
                 $pdo->prepare("UPDATE orders SET evidence_path=? WHERE id=?")
-                    ->execute(["evidence/{$fname}", $id]);
+                    ->execute([$fname, $id]);
             } catch(Exception $e) {}
         }
     }
