@@ -62,39 +62,42 @@ try {
         error_log("[Bot:{$bot_id}] تحويل {$stuckCount} طلب عالق (تم الدفع فيه) → stuck");
     }
 
-    // ────── Layer 1: Atomic Lock ──────
-    $pdo->beginTransaction();
-
-    $stmt = $pdo->prepare("
-        SELECT * FROM orders
+    // ────── Layer 1: High-Concurrency Atomic Lock ──────
+    // استخدام UPDATE المباشر بدلاً من SELECT FOR UPDATE لمنع أي تضارب (Deadlocks) أثناء الضغط العالي
+    $lockStmt = $pdo->prepare("
+        UPDATE orders
+        SET status = 'processing',
+            locked_by = :bot_id,
+            locked_at = NOW(),
+            bot_assigned = :bot_id,
+            dispatched_at = NOW()
         WHERE status = 'pending'
           AND (locked_by IS NULL OR locked_by = '')
         ORDER BY created_at ASC
         LIMIT 1
-        FOR UPDATE
     ");
-    $stmt->execute();
-    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    $lockStmt->execute([':bot_id' => $bot_id]);
 
-    if (!$order) {
-        $pdo->commit();
+    if ($lockStmt->rowCount() === 0) {
         echo json_encode(array('success' => true, 'data' => null, 'message' => 'No pending orders'));
         exit;
     }
 
-    // قفل الطلب لهذا البوت
-    $lockStmt = $pdo->prepare("
-        UPDATE orders
-        SET status = 'processing',
-            locked_by = ?,
-            locked_at = NOW(),
-            bot_assigned = ?,
-            dispatched_at = NOW()
-        WHERE id = ?
+    // استرجاع الطلب الذي تم قفله للتو لهذا البوت
+    $stmt = $pdo->prepare("
+        SELECT * FROM orders
+        WHERE bot_assigned = :bot_id
+          AND status = 'processing'
+        ORDER BY dispatched_at DESC
+        LIMIT 1
     ");
-    $lockStmt->execute(array($bot_id, $bot_id, $order['id']));
+    $stmt->execute([':bot_id' => $bot_id]);
+    $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $pdo->commit();
+    if (!$order) {
+        echo json_encode(array('success' => false, 'error' => 'Lock acquired but order not found'));
+        exit;
+    }
 
     $diamonds = isset($order['diamonds']) ? $order['diamonds'] : (isset($order['amount']) ? $order['amount'] : '100');
     $order['diamonds'] = $diamonds;
