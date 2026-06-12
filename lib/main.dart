@@ -64,6 +64,14 @@ void main() async {
     await Hive.openBox('cart', encryptionCipher: cipher);
   }
 
+  // === cartBox (بيانات السلة بما فيها الـ Player ID - يجب تشفيرها) ===
+  try {
+    await Hive.openBox('cartBox', encryptionCipher: cipher);
+  } catch (e) {
+    await Hive.deleteBoxFromDisk('cartBox');
+    await Hive.openBox('cartBox', encryptionCipher: cipher);
+  }
+
   runApp(const MyApp());
 }
 

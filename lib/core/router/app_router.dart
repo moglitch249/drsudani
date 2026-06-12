@@ -19,12 +19,17 @@ import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/profile/presentation/screens/wallet_screen.dart';
 import '../../features/product/presentation/screens/product_detail_screen.dart';
 import '../../features/checkout/presentation/screens/order_success_screen.dart';
+import '../../features/orders/presentation/screens/order_detail_screen.dart';
+import '../../features/orders/data/models/order_model.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../di/injection.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/bloc/auth_state_event.dart';
 import '../../features/product/presentation/bloc/product_cubit.dart';
 import '../../features/home/presentation/bloc/home_cubit.dart';
+import 'package:showcaseview/showcaseview.dart';
+import '../utils/tour_keys.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../theme/app_theme.dart';
 import '../../features/cart/presentation/screens/cart_screen.dart';
@@ -120,53 +125,72 @@ class ScaffoldWithNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true,
-      body: navigationShell,
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              height: 70,
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor.withOpacity(0.6),
-                border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10)),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _NavBarItem(
-                    icon: CupertinoIcons.home,
-                    label: AppLocalizations.of(context)!.home,
-                    isSelected: navigationShell.currentIndex == 0,
-                    onTap: () => _goBranch(0),
+    return ShowCaseWidget(
+      builder: Builder(
+        builder: (context) => Scaffold(
+          extendBody: true,
+          body: navigationShell,
+          bottomNavigationBar: Padding(
+            padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor.withOpacity(0.6),
+                    border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10)),
+                    ],
                   ),
-                  _NavBarItem(
-                    icon: CupertinoIcons.bag,
-                    label: AppLocalizations.of(context)!.shop,
-                    isSelected: navigationShell.currentIndex == 1,
-                    onTap: () => _goBranch(1),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _NavBarItem(
+                        icon: CupertinoIcons.home,
+                        label: AppLocalizations.of(context)!.home,
+                        isSelected: navigationShell.currentIndex == 0,
+                        onTap: () => _goBranch(0),
+                      ),
+                      Showcase(
+                        key: TourKeys.shopTabKey,
+                        title: 'الأقسام السريعة',
+                        description: 'تصفح ألعابك وخدماتك المفضلة بسرعة من خلال هذه التصنيفات. 🛒',
+                        child: _NavBarItem(
+                          icon: CupertinoIcons.bag,
+                          label: AppLocalizations.of(context)!.shop,
+                          isSelected: navigationShell.currentIndex == 1,
+                          onTap: () => _goBranch(1),
+                        ),
+                      ),
+                      Showcase(
+                        key: TourKeys.ordersTabKey,
+                        title: 'زر الطلبات',
+                        description: 'تابع طلباتك السابقة وتعرف على حالتها (قيد المعالجة، مكتملة) من هنا. 📦',
+                        child: _NavBarItem(
+                          icon: CupertinoIcons.doc_text,
+                          label: AppLocalizations.of(context)!.orders,
+                          isSelected: navigationShell.currentIndex == 2,
+                          onTap: () => _goBranch(2),
+                        ),
+                      ),
+                      Showcase(
+                        key: TourKeys.profileTabKey,
+                        title: 'زر الإعدادات والبروفايل',
+                        description: 'تحكم في حسابك، قم بتغيير لغة التطبيق، أو بدّل بين الوضع المظلم والفاتح. ⚙️',
+                        child: _NavBarItem(
+                          icon: CupertinoIcons.settings,
+                          label: AppLocalizations.of(context)!.settings,
+                          isSelected: navigationShell.currentIndex == 3,
+                          onTap: () => _goBranch(3),
+                        ),
+                      ),
+                    ],
                   ),
-                  _NavBarItem(
-                    icon: CupertinoIcons.doc_text,
-                    label: AppLocalizations.of(context)!.orders,
-                    isSelected: navigationShell.currentIndex == 2,
-                    onTap: () => _goBranch(2),
-                  ),
-                  _NavBarItem(
-                    icon: CupertinoIcons.settings,
-                    label: AppLocalizations.of(context)!.settings,
-                    isSelected: navigationShell.currentIndex == 3,
-                    onTap: () => _goBranch(3),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -193,7 +217,10 @@ class _NavBarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isSelected ? AppTheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.5);
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       behavior: HitTestBehavior.opaque,
       child: Container(
         width: 60,
@@ -341,10 +368,17 @@ class AppRouter {
                 builder: (context, state) => const OrdersScreen(),
               ),
               GoRoute(
-                path: 'order-success/:id',
+                path: '/order-success/:id',
                 builder: (context, state) {
                   final orderId = state.pathParameters['id'] ?? '';
                   return OrderSuccessScreen(orderId: orderId);
+                },
+              ),
+              GoRoute(
+                path: '/order-detail',
+                builder: (context, state) {
+                  final order = state.extra as OrderModel;
+                  return OrderDetailScreen(order: order);
                 },
               ),
             ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:confetti/confetti.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/app_dimensions.dart';
 import '../../../../core/widgets/ds_button.dart';
@@ -18,12 +19,15 @@ class OrderSuccessScreen extends StatefulWidget {
 
 class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
   late AudioPlayer _audioPlayer;
+  late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
     _playSound();
+    _confettiController.play();
   }
 
   Future<void> _playSound() async {
@@ -37,6 +41,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
 
@@ -44,12 +49,15 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.xl),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
+      body: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimensions.xl),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Spacer(),
               
@@ -123,7 +131,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '#\${widget.orderId}',
+                          '#${widget.orderId}',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
@@ -167,27 +175,34 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
               
               // Actions
               DsButton(
-                text: 'تتبع الطلب',
+                label: 'تتبع الطلب',
                 onPressed: () {
                   context.go('/orders');
                 },
-                isFullWidth: true,
               ).animate().slideY(begin: 0.5, end: 0, duration: 500.ms, delay: 500.ms).fadeIn(),
               
               const SizedBox(height: AppDimensions.md),
               
               DsButton(
-                text: 'العودة للرئيسية',
+                label: 'العودة للرئيسية',
                 onPressed: () {
                   context.go('/home');
                 },
-                isFullWidth: true,
-                isOutlined: true,
+                variant: DsButtonVariant.secondary,
               ).animate().slideY(begin: 0.5, end: 0, duration: 500.ms, delay: 600.ms).fadeIn(),
             ],
           ),
         ),
       ),
-    );
-  }
+      ConfettiWidget(
+        confettiController: _confettiController,
+        blastDirectionality: BlastDirectionality.explosive,
+        shouldLoop: false,
+        colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+        gravity: 0.1,
+        emissionFrequency: 0.05,
+      ),
+    ],
+  );
+}
 }

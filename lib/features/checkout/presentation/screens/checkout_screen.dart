@@ -71,30 +71,45 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           return;
         }
       } catch (e) {
+        // لا نسمح بالمرور عند حدوث خطأ - فشل البيومتركس = رفض الدفع
         debugPrint('Biometrics error: $e');
-        // تستمر العملية إذا فشل القارئ لتجنب تعطيل الدفع تماماً
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذر التحقق من الهوية. يرجى المحاولة مجدداً.'), backgroundColor: Colors.orange),
+          );
+        }
+        return;
       }
     }
 
     setState(() => _isLoading = true);
 
     try {
+      // === Input Sanitization (A03 Injection Prevention) ===
+      String _sanitize(String input) {
+        // Strip HTML, limit length, trim whitespace
+        final stripped = input.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+        return stripped.length > 200 ? stripped.substring(0, 200) : stripped;
+      }
+
       final List<Map<String, dynamic>> lineItems = cartState.items.map((item) {
         final List<Map<String, dynamic>> metaData = [];
         
         if (item.customField.isNotEmpty) {
           metaData.add({
             'key': 'Player ID',
-            'value': item.customField,
+            'value': _sanitize(item.customField),
           });
         }
         
         if (item.customAddons != null && item.customAddons!.isNotEmpty) {
           item.customAddons!.forEach((key, value) {
-            metaData.add({
-              'key': key,
-              'value': value,
-            });
+            // Sanitize both key and value
+            final safeKey = _sanitize(key.toString());
+            final safeValue = _sanitize(value.toString());
+            if (safeKey.isNotEmpty && safeValue.isNotEmpty) {
+              metaData.add({'key': safeKey, 'value': safeValue});
+            }
           });
         }
 
@@ -136,7 +151,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         context.read<WalletCubit>().fetchWalletData();
         
         if (mounted) {
-          context.go('/order-success/\${response.data['order_id']}');
+          context.go('/order-success/\${response.data["order_id"]}');
         }
       } else {
         final msg = response.data['message'] ?? 'فشل إنشاء الطلب';

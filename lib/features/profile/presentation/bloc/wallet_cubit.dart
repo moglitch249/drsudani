@@ -90,7 +90,6 @@ class WalletCubit extends Cubit<WalletState> {
             meta['value'].toString().replaceAll(',', '').trim(),
           );
           if (parsed != null) {
-            debugPrint('[Wallet] ✅ رصيد من "$key" = $parsed');
             return parsed;
           }
         }
@@ -118,7 +117,6 @@ class WalletCubit extends Cubit<WalletState> {
       final res = await _apiService.getWalletData();
       if (res.statusCode == 200 && res.data?['success'] == true) {
         final balance = double.tryParse(res.data['balance']?.toString() ?? '0') ?? 0.0;
-        debugPrint('[Wallet] ✅ Balance retrieved: $balance');
         emit(WalletLoaded(balance, [], firstName: res.data['first_name']?.toString()));
         return;
       }

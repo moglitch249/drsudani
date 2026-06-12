@@ -1,5 +1,6 @@
 import 'dart:ui' as dart_ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
@@ -381,6 +382,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             child: InkWell(
                               borderRadius: BorderRadius.circular(16),
                               onTap: () async {
+                                HapticFeedback.lightImpact();
                                 if (_isFastBuyInProgress) return;
                                 
                                 setState(() => _isFastBuyInProgress = true);

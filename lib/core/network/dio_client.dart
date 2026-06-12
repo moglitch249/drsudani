@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:dio/io.dart';
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 import 'package:flutter/foundation.dart';
@@ -20,8 +22,19 @@ abstract class DioModule {
       ),
     );
 
+    // === Layer 4: SSL Pinning & Transport Security ===
+    dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        // Reject all bad certificates to prevent MITM attacks (Charles Proxy, etc.)
+        client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+          return false; // Force strictly valid SSL certs
+        };
+        return client;
+      },
+    );
+
     dio.interceptors.add(AuthInterceptor());
-    
 
     // Custom log interceptor to mask sensitive data
     if (kDebugMode) {

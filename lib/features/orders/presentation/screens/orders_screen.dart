@@ -12,6 +12,7 @@ import '../../../auth/presentation/bloc/auth_state_event.dart';
 import '../../../auth/data/datasources/auth_local_data_source.dart';
 import '../bloc/orders_cubit.dart';
 import '../../data/models/order_model.dart';
+import 'package:go_router/go_router.dart';
 
 class OrdersScreen extends StatelessWidget {
   const OrdersScreen({Key? key}) : super(key: key);
@@ -69,9 +70,9 @@ class OrdersScreen extends StatelessWidget {
                 return TabBarView(
                   children: [
                     _OrdersListView(orders: allOrders, l10n: l10n),
-                    _OrdersListView(orders: allOrders.where((o) => o.status == 'pending' || o.status == 'on-hold').toList(), l10n: l10n),
+                    _OrdersListView(orders: allOrders.where((o) => o.status == 'pending' || o.status == 'on-hold' || o.status == 'processing').toList(), l10n: l10n),
                     _OrdersListView(orders: allOrders.where((o) => o.status == 'completed').toList(), l10n: l10n),
-                    _OrdersListView(orders: allOrders.where((o) => o.status == 'cancelled' || o.status == 'refunded' || o.status == 'failed').toList(), l10n: l10n),
+                    _OrdersListView(orders: allOrders.where((o) => o.status == 'cancelled' || o.status == 'refunded' || o.status == 'failed' || o.status == 'trash').toList(), l10n: l10n),
                   ],
                 );
               }
@@ -173,11 +174,14 @@ class _OrderCard extends StatelessWidget {
     final isArabic = l10n.locale.languageCode == 'ar';
     final currency = isArabic ? 'ج.س' : 'SDG';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppDimensions.md),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
+    return GestureDetector(
+      onTap: () => context.push('/order-detail', extra: order),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppDimensions.md),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),

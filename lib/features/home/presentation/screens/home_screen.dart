@@ -25,6 +25,10 @@ import '../../../cart/presentation/bloc/cart_state.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state_event.dart';
 import '../../../../core/utils/price_formatter.dart';
+import 'package:flutter/services.dart';
+import 'package:showcaseview/showcaseview.dart';
+import '../../../../core/utils/tour_keys.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -40,7 +44,68 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final PageController _adsController = PageController();
   int _currentAd = 0;
+  int _currentCardIndex = 0;
   Timer? _adsTimer;
+  bool _hasCheckedTour = false;
+
+  void _checkAndStartTour(BuildContext context) async {
+    if (_hasCheckedTour) return;
+    _hasCheckedTour = true;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSeenTour = prefs.getBool('has_seen_tour') ?? false;
+      
+      if (!hasSeenTour && mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text('أهلاً بك في دكتور سوداني!', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+              content: const Text('هل تسمح لنا بأخذك في جولة سريعة وممتعة لتعريفك بأهم مميزات التطبيق؟', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    prefs.setBool('has_seen_tour', true);
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('تخطي', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    prefs.setBool('has_seen_tour', true);
+                    Navigator.pop(dialogContext);
+                    // Start tour after dialog is closed
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (mounted) {
+                        ShowCaseWidget.of(context).startShowCase([
+                          TourKeys.walletKey,
+                          TourKeys.categoriesKey,
+                          TourKeys.shopTabKey,
+                          TourKeys.ordersTabKey,
+                          TourKeys.profileTabKey,
+                        ]);
+                      }
+                    });
+                  },
+                  child: const Text('يلا بينا!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          }
+        );
+      }
+    } catch (e) {
+      // Ignore shared prefs errors
+    }
+  }
 
   @override
   void initState() {
@@ -111,6 +176,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           } else if (state is HomeLoaded) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _checkAndStartTour(context);
+            });
             return CustomScrollView(
               slivers: [
                 const DsAppBar(title: ''),
@@ -237,69 +305,178 @@ class _HomeScreenState extends State<HomeScreen> {
           if (state is WalletLoaded) {
             balance = state.balance;
           }
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppTheme.primary.withOpacity(0.15),
-                  AppTheme.primary.withOpacity(0.05),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          return Showcase(
+            key: TourKeys.walletKey,
+            title: 'المحفظة والبطاقات',
+            description: 'اسحب يميناً ويساراً للتنقل بين بطاقاتك (الرصيد، والطلبات النشطة). 💳',
+            child: Column(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.account_balance_wallet_outlined, color: AppTheme.primary, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.walletBalance,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                          ),
-                        ),
-                        Text(
-                          PriceFormatter.formatWithCurrency(balance, l10n.locale.languageCode == 'ar', withDecimals: true),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                ElevatedButton(
-                  onPressed: () => context.push('/wallet'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    minimumSize: Size.zero,
+                SizedBox(
+                  height: 90,
+                  child: PageView(
+                    onPageChanged: (index) => setState(() => _currentCardIndex = index),
+                    children: [
+                      _buildMainWalletCard(context, balance, l10n),
+                      _buildOrdersStatCard(context, l10n),
+                    ],
                   ),
-                  child: Text(l10n.locale.languageCode == 'ar' ? 'تعبئة الرصيد' : 'Top Up', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(2, (index) {
+                    final isSelected = _currentCardIndex == index;
+                    return AnimatedContainer(
+                      duration: 300.ms,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: isSelected ? 20 : 8,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppTheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    );
+                  }),
                 ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildMainWalletCard(BuildContext context, double balance, AppLocalizations l10n) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primary.withOpacity(0.15),
+            AppTheme.primary.withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.account_balance_wallet_outlined, color: AppTheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    l10n.walletBalance,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                  Text(
+                    PriceFormatter.formatWithCurrency(balance, l10n.locale.languageCode == 'ar', withDecimals: true),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          ElevatedButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context.push('/wallet');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              minimumSize: Size.zero,
+            ),
+            child: Text(l10n.locale.languageCode == 'ar' ? 'تعبئة الرصيد' : 'Top Up', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrdersStatCard(BuildContext context, AppLocalizations l10n) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        // Go to orders tab (index 2) -> Wait, using goRouter shell branch is better but tricky from here. 
+        // We can just switch the tab or push to a specific route if needed. 
+        // For now, it's just a stat card.
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.success.withOpacity(0.15),
+              AppTheme.success.withOpacity(0.05),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.success.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.shopping_bag_outlined, color: AppTheme.success, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'طلباتك النشطة',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                    const Text(
+                      'متابعة حالة الطلبات',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)),
+          ],
+        ),
       ),
     );
   }
@@ -389,9 +566,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: Showcase(
+        key: TourKeys.categoriesKey,
+        title: 'الأقسام',
+        description: 'تصفح التصنيفات المختلفة لسهولة الوصول إلى المنتجات المطلوبة. 🎮',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Text(AppLocalizations.of(context)!.shopByCategory, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: AppDimensions.md),
           SingleChildScrollView(
@@ -502,7 +683,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         border: Border.all(color: Colors.white.withOpacity(0.3), width: 0.5),
                       ),
                       child: Text(
-                        '\${index + 1} / \${state.ads.length}',
+                        '${index + 1} / ${state.ads.length}',
                         textDirection: TextDirection.ltr,
                         style: const TextStyle(
                           color: Colors.white,
