@@ -1,0 +1,307 @@
+/* ================================================
+   main.css — المتغيرات الأساسية والنمط العام
+   ================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap');
+
+/* ── المتغيرات ────────────────────────────────── */
+:root {
+  /* ── الأساسيات (رؤية متميزة) ────────────────── */
+  --primary-h:            200;
+  --primary-s:            82%;
+  --primary-l:            74%;
+  
+  --color-primary:        hsl(var(--primary-h), var(--primary-s), var(--primary-l));
+  --color-primary-dark:   hsl(var(--primary-h), var(--primary-s), 60%);
+  --color-primary-light:  hsl(var(--primary-h), var(--primary-s), 91%);
+  --color-primary-bg:     hsl(var(--primary-h), var(--primary-s), 97%);
+  --color-white:          #FFFFFF;
+  --color-surface:        #FFFFFF; /* للطبقات فوق الخلفية */
+
+  /* ── لوحة الألوان الرمادية (Gray Scale) ─────── */
+  --color-gray-50:        #F8FAFC;
+  --color-gray-100:       #F1F5F9;
+  --color-gray-200:       #E2E8F0;
+  --color-gray-300:       #CBD5E1;
+  --color-gray-400:       #94A3B8;
+  --color-gray-500:       #64748B;
+  --color-gray-600:       #475569;
+  --color-gray-700:       #334155;
+  --color-gray-800:       #1E293B;
+  --color-gray-900:       #0F172A;
+
+  /* ── النصوص ────────────────────────────────── */
+  --color-text:           #1E293B;
+  --color-text-dim:       #475569;
+  --color-text-muted:     #94A3B8;
+
+  /* ── الحالات (Semantic) ─────────────────────── */
+  --color-success:        hsl(160, 84%, 39%);
+  --color-success-light:  hsl(160, 84%, 93%);
+  --color-warning:        hsl(38, 92%, 50%);
+  --color-warning-light:  hsl(38, 92%, 93%);
+  --color-danger:         hsl(0, 84%, 60%);
+  --color-danger-light:   hsl(0, 84%, 94%);
+  --color-info:           hsl(217, 91%, 60%);
+  --color-info-light:     hsl(217, 91%, 95%);
+
+  /* ── الأبعاد والحدود ────────────────────────── */
+  --sidebar-width:        260px;
+  --sidebar-collapsed:    80px;
+  --topbar-height:        70px;
+  --radius-sm:            10px;
+  --radius:               14px;
+  --radius-lg:            18px;
+  --radius-xl:            24px;
+  --radius-full:          9999px;
+
+  /* ── تأثيرات الزجاج (Glassmorphism) ─────────── */
+  --glass-bg:             rgba(255, 255, 255, 0.72);
+  --glass-border:         rgba(255, 255, 255, 0.4);
+  --glass-blur:           12px;
+
+  /* ── الظلال (Premium Shadows) ──────────────── */
+  --shadow-xs:            0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm:            0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+  --shadow:               0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  --shadow-md:            0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+  --shadow-lg:            0 25px 50px -12px rgba(0,0,0,0.25);
+
+  --transition:           0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow:      0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── إعادة الضبط ──────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Cairo', sans-serif;
+  direction: rtl;
+  background-color: var(--color-gray-50);
+  color: var(--color-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul, ol { list-style: none; }
+
+img, svg { display: block; max-width: 100%; }
+
+button, input, select, textarea {
+  font-family: 'Cairo', sans-serif;
+  font-size: inherit;
+}
+
+input:focus, select:focus, textarea:focus, button:focus {
+  outline: none;
+}
+
+/* ── عناصر النموذج الأساسية ───────────────────── */
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--color-white);
+  border: 1.5px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 400;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  appearance: none;
+}
+
+.form-control:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(137, 207, 240, 0.20);
+}
+
+.form-control::placeholder {
+  color: var(--color-text-muted);
+  font-weight: 300;
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 90px;
+}
+
+select.form-control {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394A3B8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 14px center;
+  padding-left: 38px;
+}
+
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-gray-700);
+  margin-bottom: 7px;
+}
+
+.form-group label .required { color: var(--color-danger); }
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ── أزرار ────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: var(--color-white);
+  box-shadow: 0 4px 14px -2px hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.4);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, hsl(var(--primary-h), var(--primary-s), 78%), var(--color-primary-dark));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -3px hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.5);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  background: var(--color-surface);
+  color: var(--color-gray-600);
+  border: 1.5px solid var(--color-gray-200);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+  color: var(--color-gray-800);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.badge-success { background: hsla(160, 84%, 39%, 0.12); color: hsl(160, 84%, 30%); border: 1px solid hsla(160, 84%, 39%, 0.2); }
+.badge-danger  { background: hsla(0, 84%, 60%, 0.12);  color: hsl(0, 84%, 50%);  border: 1px solid hsla(0, 84%, 60%, 0.2); }
+.badge-warning { background: hsla(38, 92%, 50%, 0.12); color: hsl(38, 92%, 40%);  border: 1px solid hsla(38, 92%, 50%, 0.2); }
+.badge-info    { background: hsla(217, 91%, 60%, 0.12); color: hsl(217, 91%, 50%); border: 1px solid hsla(217, 91%, 60%, 0.2); }
+.badge-gray    { background: var(--color-gray-100);      color: var(--color-gray-600);     border: 1px solid var(--color-gray-200); }
+.badge-primary { background: hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.12); color: var(--color-primary-dark); border: 1px solid hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.2); }
+
+
+/* ── مساعدات ──────────────────────────────────── */
+.hidden       { display: none !important; }
+.text-center  { text-align: center; }
+.text-start   { text-align: right; }
+.text-end     { text-align: left; }
+.text-muted   { color: var(--color-text-muted); }
+.text-sm      { font-size: 0.85rem; }
+.text-xs      { font-size: 0.78rem; }
+.fw-bold      { font-weight: 700; }
+.fw-semibold  { font-weight: 600; }
+.mt-0  { margin-top: 0; }
+.mt-8  { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+.gap-8  { gap: 8px; }
+.gap-12 { gap: 12px; }
+.flex  { display: flex; }
+.flex-center { display: flex; align-items: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-end { display: flex; align-items: center; justify-content: flex-end; }
+
+/* ── Responsive ───────────────────────────────── */
+@media (max-width: 768px) {
+  .form-row { grid-template-columns: 1fr; }
+}
+
+/* ── Dark Mode (الوضع الليلي) ─────────────────── */
+body.dark-theme {
+  --color-white:          #1E293B;
+  --color-surface:        #111827;
+  --color-gray-50:        #0B0F19;
+  --color-gray-100:       #1F2937;
+  --color-gray-200:       #374151;
+  --color-gray-300:       #4B5563;
+  --color-gray-400:       #6B7280;
+  --color-gray-500:       #9CA3AF;
+  --color-gray-600:       #D1D5DB;
+  --color-gray-700:       #E5E7EB;
+  --color-gray-800:       #F3F4F6;
+  --color-gray-900:       #F9FAFB;
+
+  --color-text:           #F3F4F6;
+  --color-text-dim:       #D1D5DB;
+  --color-text-muted:     #9CA3AF;
+
+  --color-primary-bg:     rgba(var(--primary-h), var(--primary-s), var(--primary-l), 0.08);
+  
+  --glass-bg:             rgba(17, 24, 39, 0.75);
+  --glass-border:         rgba(255, 255, 255, 0.08);
+
+  --shadow-xs:            0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm:            0 4px 6px -1px rgba(0,0,0,0.4);
+  --shadow:               0 10px 15px -3px rgba(0,0,0,0.5);
+  --shadow-md:            0 20px 25px -5px rgba(0,0,0,0.6);
+}
+
+/* Fixes for dark mode inputs and tables */
+body.dark-theme select.form-control {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23CBD5E1' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+body.dark-theme table tbody tr:hover {
+  background: var(--color-gray-200);
+}
+body.dark-theme .stat-card {
+  --card-color: var(--color-gray-300);
+}
+body.dark-theme .stat-card.blue   { --card-color: var(--color-primary); }
+body.dark-theme .stat-card.green  { --card-color: var(--color-success); }
+body.dark-theme .stat-card.orange { --card-color: var(--color-warning); }
+body.dark-theme .stat-card.red    { --card-color: var(--color-danger);  }
