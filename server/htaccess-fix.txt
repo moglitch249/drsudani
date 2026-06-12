@@ -1,0 +1,30 @@
+# ================================================================
+# DrSudani — إصلاح Authorization Header لـ WordPress REST API
+# ================================================================
+# الملف الأصلي لـ WordPress موجود في: /public_html/.htaccess
+# أضف هذه الأسطر بعد السطر: # BEGIN WordPress
+# ================================================================
+
+# السماح لـ Apache بتمرير Authorization Header إلى PHP
+# (ضروري لعمل JWT Authentication)
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+
+# بديل إذا كانت الطريقة الأولى لا تعمل:
+# RewriteEngine On
+# RewriteCond %{HTTP:Authorization} ^(.*)
+# RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
+
+# ================================================================
+# نسخة كاملة من .htaccess بعد التعديل (للمراجعة)
+# ================================================================
+# # BEGIN WordPress
+# <IfModule mod_rewrite.c>
+# RewriteEngine On
+# RewriteBase /
+# RewriteRule ^index\.php$ - [L]
+# RewriteCond %{REQUEST_FILENAME} !-f
+# RewriteCond %{REQUEST_FILENAME} !-d
+# RewriteRule . /index.php [L]
+# </IfModule>
+# SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1   <-- أضف هذا
+# # END WordPress
