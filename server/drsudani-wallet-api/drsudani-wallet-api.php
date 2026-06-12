@@ -72,6 +72,7 @@ add_action( 'rest_api_init', function () {
     register_rest_route( 'drsudani/v1', '/wallet',   [ 'methods' => 'GET',  'callback' => 'ds_wallet_balance', 'permission_callback' => $auth ] );
     register_rest_route( 'drsudani/v1', '/checkout', [ 'methods' => 'POST', 'callback' => 'ds_checkout',       'permission_callback' => $auth ] );
     register_rest_route( 'drsudani/v1', '/orders',   [ 'methods' => 'GET',  'callback' => 'ds_my_orders',      'permission_callback' => $auth ] );
+    register_rest_route( 'drsudani/v1', '/logout',   [ 'methods' => 'POST', 'callback' => 'ds_logout',         'permission_callback' => $auth ] );
 
 } );
 
@@ -83,8 +84,19 @@ add_filter( 'rest_post_dispatch', function ( WP_REST_Response $response ) {
     $response->header( 'X-Frame-Options',         'DENY' );
     $response->header( 'Referrer-Policy',          'no-referrer' );
     $response->header( 'Cache-Control',            'no-store, no-cache, must-revalidate' );
+    $response->header( 'X-XSS-Protection',         '1; mode=block' );
+    $response->header( 'Permissions-Policy',       'geolocation=(), microphone=()' );
     return $response;
 }, 10, 1 );
+
+add_filter('rest_pre_serve_request', function($served, $result, $request) {
+    $allowed = ['capacitor://localhost', 'http://localhost'];
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if (in_array($origin, $allowed, true)) {
+        header('Access-Control-Allow-Origin: ' . $origin);
+    }
+    return $served;
+}, 10, 3);
 
 // ===========================================================================
 // PERMISSION CALLBACK  –  ds_verify_request()
@@ -134,6 +146,11 @@ function ds_verify_request( WP_REST_Request $request ): bool|WP_Error {
     $token = ds_extract_bearer_token( $request->get_header( 'Authorization' ) );
     if ( ! $token ) {
         return new WP_Error( 'no_token', 'Authorization token missing.', [ 'status' => 401 ] );
+    }
+
+    // Check Blacklist
+    if ( get_transient( 'ds_bl_' . md5( $token ) ) ) {
+        return new WP_Error( 'invalid_token', 'Token has been revoked.', [ 'status' => 401 ] );
     }
 
     if ( strlen( $token ) > 4096 ) {
@@ -188,11 +205,12 @@ function ds_my_orders( WP_REST_Request $request ): WP_REST_Response|WP_Error {
     $per_page = min( 50, (int) ( $request->get_param( 'per_page' ) ?: 20 ) );
 
     $orders = wc_get_orders( [
-        'customer' => $user_id,
-        'limit'    => $per_page,
-        'paged'    => $page,
-        'orderby'  => 'date',
-        'order'    => 'DESC',
+        'customer'     => $user_id,
+        'limit'        => $per_page,
+        'paged'        => $page,
+        'orderby'      => 'date',
+        'order'        => 'DESC',
+        'date_created' => '>=' . gmdate( 'Y-m-d', strtotime( '-2 years' ) ),
     ] );
 
     $result = [];
@@ -237,6 +255,29 @@ function ds_my_orders( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 }
 
 /**
+ * POST /drsudani/v1/logout
+ * Adds the JWT token to a blacklist to invalidate it immediately on the server.
+ */
+function ds_logout( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+    $token = ds_extract_bearer_token( $request->get_header( 'Authorization' ) );
+    if ( ! $token ) {
+        return new WP_Error( 'no_token', 'No token provided.', [ 'status' => 400 ] );
+    }
+
+    $payload = ds_jwt_decode_payload( $token );
+    if ( ! $payload || ! isset( $payload->exp ) ) {
+        return rest_ensure_response( [ 'success' => true ] ); // Malformed token is already useless
+    }
+
+    $ttl = (int) $payload->exp - time();
+    if ( $ttl > 0 ) {
+        set_transient( 'ds_bl_' . md5( $token ), 1, $ttl );
+    }
+
+    return rest_ensure_response( [ 'success' => true ] );
+}
+
+/**
  * POST /drsudani/v1/checkout
  * Creates a WooCommerce order paid from the wallet.
  *
@@ -256,12 +297,16 @@ function ds_checkout( WP_REST_Request $request ): WP_REST_Response|WP_Error {
     // --- Idempotency key (prevents duplicate submissions) ---
     $idem_raw = $request->get_header( 'Idempotency-Key' );
     if ( $idem_raw ) {
-        $idem_key = 'ds_idem_' . md5( sanitize_key( $idem_raw ) );
+        if ( strlen( $idem_raw ) > 128 ) {
+            ds_lock_release( $lock_key );
+            return new WP_Error( 'invalid_idempotency_key', 'Idempotency key too long.', [ 'status' => 400 ] );
+        }
+        $idem_key = 'ds_idem_' . hash_hmac( 'sha256', $idem_raw, DS_APP_SECRET );
         if ( get_transient( $idem_key ) ) {
             ds_lock_release( $lock_key );
             return new WP_Error( 'duplicate_request', 'Duplicate request.', [ 'status' => 409 ] );
         }
-        set_transient( $idem_key, 1, 60 );
+        set_transient( $idem_key, 1, 86400 ); // 24 hours
     }
 
     // --- Parse & validate line items ---
@@ -298,7 +343,7 @@ function ds_checkout( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
         if ( ! $product || $product->get_status() !== 'publish' ) {
             ds_lock_release( $lock_key );
-            return new WP_Error( 'invalid_product', "Product {$product_id} is unavailable.", [ 'status' => 400 ] );
+            return new WP_Error( 'invalid_product', "One or more products are unavailable.", [ 'status' => 400 ] );
         }
 
         $price = (float) $product->get_price();
@@ -335,7 +380,7 @@ function ds_checkout( WP_REST_Request $request ): WP_REST_Response|WP_Error {
     // --- Create order ---
     try {
 
-        $order = wc_create_order( [ 'customer_id' => $user_id ] );
+        $order = wc_create_order( [ 'customer_id' => $user_id, 'status' => 'pending' ] );
 
         if ( is_wp_error( $order ) ) {
             ds_lock_release( $lock_key );
@@ -345,23 +390,30 @@ function ds_checkout( WP_REST_Request $request ): WP_REST_Response|WP_Error {
         foreach ( $order_items as $oi ) {
 
             $wc_product = wc_get_product( $oi['variation_id'] > 0 ? $oi['variation_id'] : $oi['product_id'] );
-            $item_id    = $order->add_product( $wc_product, $oi['quantity'], [
-                'subtotal' => $oi['subtotal'],
-                'total'    => $oi['total'],
-            ] );
+            try {
+                $item_id = $order->add_product( $wc_product, $oi['quantity'], [
+                    'subtotal' => $oi['subtotal'],
+                    'total'    => $oi['total'],
+                ] );
 
-            if ( $item_id && ! empty( $oi['meta_data'] ) ) {
-                $line_item = $order->get_item( $item_id );
-                foreach ( $oi['meta_data'] as $meta ) {
-                    $key = (string) ( $meta['key']   ?? '' );
-                    $val = (string) ( $meta['value'] ?? '' );
-                    if ( ! in_array( $key, DS_ALLOWED_META_KEYS, true ) ) continue;
-                    $safe = substr( sanitize_text_field( strip_tags( $val ) ), 0, 200 );
-                    if ( $safe !== '' ) {
-                        $line_item->add_meta_data( sanitize_key( $key ), $safe );
+                if ( $item_id && ! empty( $oi['meta_data'] ) ) {
+                    $line_item = $order->get_item( $item_id );
+                    foreach ( $oi['meta_data'] as $meta ) {
+                        $key = strtolower( (string) ( $meta['key']   ?? '' ) );
+                        $val = (string) ( $meta['value'] ?? '' );
+                        $allowed_keys = array_map( 'strtolower', DS_ALLOWED_META_KEYS );
+                        if ( ! in_array( $key, $allowed_keys, true ) ) continue;
+                        $safe = substr( sanitize_text_field( strip_tags( $val ) ), 0, 200 );
+                        if ( $safe !== '' ) {
+                            $line_item->add_meta_data( sanitize_key( $key ), $safe );
+                        }
                     }
+                    $line_item->save();
                 }
-                $line_item->save();
+            } catch ( Exception $e ) {
+                $order->update_status( 'failed', 'Failed to add product: ' . $e->getMessage() );
+                ds_lock_release( $lock_key );
+                return new WP_Error( 'item_error', 'Failed to add products to order.', [ 'status' => 500 ] );
             }
         }
 
@@ -488,12 +540,7 @@ function ds_extract_bearer_token( string $header ): string {
  * Returns a validated IP string or empty string.
  */
 function ds_real_ip(): string {
-    foreach ( [ 'HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' ] as $key ) {
-        $candidate = trim( explode( ',', $_SERVER[ $key ] ?? '' )[0] );
-        $ip        = filter_var( $candidate, FILTER_VALIDATE_IP );
-        if ( $ip ) return $ip;
-    }
-    return '';
+    return filter_var( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ), FILTER_VALIDATE_IP ) ?: '';
 }
 
 /**
@@ -501,11 +548,25 @@ function ds_real_ip(): string {
  * Returns true if the request is within the limit, false if exceeded.
  */
 function ds_rate_limit( string $ip, int $limit ): bool {
-    $key   = 'ds_rl_' . md5( $ip );
-    $count = (int) get_transient( $key );
-    if ( $count >= $limit ) return false;
-    set_transient( $key, $count + 1, 60 );
-    return true;
+    global $wpdb;
+    $key         = '_transient_ds_rl_' . md5( $ip );
+    $timeout_key = '_transient_timeout_ds_rl_' . md5( $ip );
+    
+    // Cleanup if expired
+    $timeout = (int) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $timeout_key ) );
+    if ( $timeout > 0 && $timeout < time() ) {
+        $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name IN (%s, %s)", $key, $timeout_key ) );
+    }
+
+    // Initialize if not exists
+    $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, 0, 'no')", $key ) );
+    $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %d, 'no')", $timeout_key, time() + 60 ) );
+
+    // Atomic increment
+    $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = option_value + 1 WHERE option_name = %s", $key ) );
+    
+    $count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $key ) );
+    return $count <= $limit;
 }
 
 /**
@@ -533,28 +594,17 @@ function ds_lock_acquire( string $key, int $ttl = 15 ): bool {
 
     if ( $inserted ) return true;
 
-    // Lock exists – check if it has expired, then reclaim it atomically
-    $existing = (int) $wpdb->get_var(
+    // Atomic compare-and-swap: update if existing lock has expired
+    $updated = $wpdb->query(
         $wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
-            $option
+            "UPDATE {$wpdb->options} SET option_value = %d WHERE option_name = %s AND option_value < %d",
+            $expiry,
+            $option,
+            time()
         )
     );
 
-    if ( $existing > 0 && $existing < time() ) {
-        // Atomic compare-and-swap: only update if value still matches
-        $updated = $wpdb->query(
-            $wpdb->prepare(
-                "UPDATE {$wpdb->options} SET option_value = %d WHERE option_name = %s AND option_value = %d",
-                $expiry,
-                $option,
-                $existing
-            )
-        );
-        return $updated > 0;
-    }
-
-    return false;
+    return $updated > 0;
 }
 
 /**
