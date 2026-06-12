@@ -89,15 +89,24 @@ class CartScreen extends StatelessWidget {
 
                       return Dismissible(
                         key: ValueKey('${item.product.id}_${item.selectedVariation}_$index'),
-                        direction: DismissDirection.endToStart,
+                        // في اللغة العربية (RTL) الحذف بالسحب يساراً = endToStart في LTR
+                        // لكن في Flutter RTL: startToEnd هو من اليمين لليسار
+                        direction: Directionality.of(context) == TextDirection.rtl
+                            ? DismissDirection.startToEnd
+                            : DismissDirection.endToStart,
                         background: Container(
                           margin: const EdgeInsets.only(bottom: AppDimensions.md),
                           decoration: BoxDecoration(
                             color: AppTheme.error.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
                           ),
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 24),
+                          alignment: Directionality.of(context) == TextDirection.rtl
+                              ? Alignment.centerLeft
+                              : Alignment.centerRight,
+                          padding: EdgeInsets.only(
+                            left: Directionality.of(context) == TextDirection.rtl ? 24 : 0,
+                            right: Directionality.of(context) == TextDirection.rtl ? 0 : 24,
+                          ),
                           child: const Icon(Icons.delete_outline, color: AppTheme.error, size: 28),
                         ),
                         onDismissed: (_) {

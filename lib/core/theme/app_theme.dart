@@ -12,7 +12,7 @@ class AppTheme {
   static const Color gold = Color(0xFFFFD700);
   static const Color textPrimary = Color(0xFFFFFFFF);
   static const Color textSecondary = Color(0xFFAAAAAA);
-  static const Color textMuted = Color(0xFF555555);
+  static const Color textMuted = Color(0xFF767676); // WCAG AA compliant on white (#767676 = 4.54:1)
   static const Color success = Color(0xFF00C853);
   static const Color warning = Color(0xFFFF9800);
   static const Color error = Color(0xFFFF3B3B);

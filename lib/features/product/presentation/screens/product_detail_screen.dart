@@ -165,19 +165,36 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                             ),
                                           ),
                                           const SizedBox(height: 8),
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.star, color: AppTheme.gold, size: 16),
-                                              const Icon(Icons.star, color: AppTheme.gold, size: 16),
-                                              const Icon(Icons.star, color: AppTheme.gold, size: 16),
-                                              const Icon(Icons.star, color: AppTheme.gold, size: 16),
-                                              const Icon(Icons.star, color: AppTheme.gold, size: 16),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                '5.0',
-                                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.bold),
-                                              ),
-                                            ],
+                                          // Stock status badge
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: product.stockStatus == 'instock'
+                                                  ? AppTheme.success.withOpacity(0.1)
+                                                  : AppTheme.error.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(20),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  width: 6, height: 6,
+                                                  decoration: BoxDecoration(
+                                                    color: product.stockStatus == 'instock' ? AppTheme.success : AppTheme.error,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  product.stockStatus == 'instock' ? 'متوفر' : 'غير متوفر',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: product.stockStatus == 'instock' ? AppTheme.success : AppTheme.error,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           const SizedBox(height: 12),
                                           // Price Display
@@ -359,12 +376,47 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 child: SafeArea(
                   child: Row(
                     children: [
+                      // Add to Cart Button
+                      Container(
+                        height: 56,
+                        width: 56,
+                        margin: const EdgeInsets.only(left: 12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Theme.of(context).dividerColor),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              if (_addToCart(context, state, l10n, showValidationSnackbar: true)) {
+                                ScaffoldMessenger.of(context).clearSnackBars();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(l10n.addedToCart),
+                                    backgroundColor: AppTheme.success,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            child: const Icon(Icons.add_shopping_cart_outlined, color: AppTheme.primary, size: 24),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Buy Now Button
                       Expanded(
                         child: Container(
                           height: 56,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF8C52FF), Color(0xFF6B3FA0)], // Simpler purple gradient
+                              colors: [Color(0xFF8C52FF), Color(0xFF6B3FA0)],
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ),
@@ -384,17 +436,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               onTap: () async {
                                 HapticFeedback.lightImpact();
                                 if (_isFastBuyInProgress) return;
-                                
                                 setState(() => _isFastBuyInProgress = true);
                                 try {
-                                  // Call addToCart to validate fields. We pass false for success snackbar!
                                   if (_addToCart(context, state, l10n, showValidationSnackbar: true)) {
-                                    // Bypass cart: first clear existing cart items
                                     await context.read<CartCubit>().clearCart();
                                     if (!mounted) return;
-                                    // Add the item silently
                                     _addToCart(context, state, l10n, showValidationSnackbar: false);
-                                    // Push directly to checkout
                                     context.push('/checkout');
                                   }
                                 } finally {
@@ -411,8 +458,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       l10n.locale.languageCode == 'ar' ? 'اشتر الآن' : 'Buy Now',
                                       style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                                     ),
-                                    const SizedBox(width: 12),
-                                    const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 22),
+                                    const SizedBox(width: 10),
+                                    const Icon(Icons.bolt_rounded, color: Colors.white, size: 22),
                                   ],
                                 ],
                               ),
@@ -438,6 +485,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     required TextEditingController controller,
     required Function(String) onChanged,
   }) {
+    // نص تلميحي ذكي بناءً على اسم الحقل
+    String hintText;
+    if (label.toLowerCase().contains('player') || label.toLowerCase().contains('id') || label.contains('آيدي')) {
+      hintText = 'ex: 123456789';
+    } else if (label.toLowerCase().contains('email') || label.contains('بريد')) {
+      hintText = 'ex: name@email.com';
+    } else if (label.toLowerCase().contains('username') || label.contains('اسم المستخدم')) {
+      hintText = 'ex: DrSudani123';
+    } else {
+      hintText = 'أدخل القيمة...';
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimensions.lg),
       child: Column(
@@ -456,7 +515,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).cardColor, // Adaptive background
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Theme.of(context).dividerColor),
             ),
@@ -467,7 +526,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               decoration: InputDecoration(
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                hintText: '12345678',
+                hintText: hintText,
                 hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
               ),
             ),

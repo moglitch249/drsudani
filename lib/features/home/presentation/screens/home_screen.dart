@@ -308,7 +308,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return Showcase(
             key: TourKeys.walletKey,
             title: 'المحفظة والبطاقات',
-            description: 'اسحب يميناً ويساراً للتنقل بين بطاقاتك (الرصيد، والطلبات النشطة). 💳',
+            description: 'اسحب يميناً ويساراً للتنقل بين بطاقاتك (الرصيد، والطلبات النشطة).',
             child: Column(
               children: [
                 SizedBox(
@@ -322,22 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(2, (index) {
-                    final isSelected = _currentCardIndex == index;
-                    return AnimatedContainer(
-                      duration: 300.ms,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      width: isSelected ? 20 : 8,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppTheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    );
-                  }),
-                ),
+                _PaginationDots(count: 2, current: _currentCardIndex),
               ],
             ),
           );
@@ -420,9 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        // Go to orders tab (index 2) -> Wait, using goRouter shell branch is better but tricky from here. 
-        // We can just switch the tab or push to a specific route if needed. 
-        // For now, it's just a stat card.
+        context.push('/orders');
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -456,7 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'طلباتك النشطة',
+                      'طلباتك',
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
@@ -541,22 +524,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: AppDimensions.md),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(displayBanners.length, (index) {
-            final isSelected = _currentBanner == index;
-            return AnimatedContainer(
-              duration: 300.ms,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: isSelected ? 24 : 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: _currentBanner == index ? AppTheme.primary : Colors.grey[300],
-                borderRadius: BorderRadius.circular(4),
-              ),
-            );
-          }),
-        ),
+        _PaginationDots(count: displayBanners.length, current: _currentBanner),
       ],
     );
   }
@@ -569,7 +537,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Showcase(
         key: TourKeys.categoriesKey,
         title: 'الأقسام',
-        description: 'تصفح التصنيفات المختلفة لسهولة الوصول إلى المنتجات المطلوبة. 🎮',
+        description: 'تصفح التصنيفات المختلفة لسهولة الوصول إلى المنتجات المطلوبة.',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -701,22 +669,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: AppDimensions.md),
         if (state.ads.length > 1)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(state.ads.length, (index) {
-              final isSelected = _currentAd == index;
-              return AnimatedContainer(
-                duration: 300.ms,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: isSelected ? 24 : 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: isSelected ? AppTheme.primary : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              );
-            }),
-          ),
+          _PaginationDots(count: state.ads.length, current: _currentAd),
         const SizedBox(height: AppDimensions.lg),
       ],
     );
@@ -868,6 +821,37 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ===========================================================================
+// Reusable Pagination Dots Widget (theme-aware)
+// ===========================================================================
+class _PaginationDots extends StatelessWidget {
+  final int count;
+  final int current;
+
+  const _PaginationDots({required this.count, required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    final inactiveColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.15);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (index) {
+        final isSelected = current == index;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: isSelected ? 22 : 8,
+          height: 7,
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primary : inactiveColor,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        );
+      }),
     );
   }
 }
