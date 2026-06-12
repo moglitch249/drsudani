@@ -45,7 +45,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return BlocProvider(
       create: (context) => getIt<ProductCubit>()..getProductById(int.parse(widget.productId)),
       child: Scaffold(
-        backgroundColor: const Color(0xFF1A0B2E), // Static deep purple background
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Dynamic background
         body: BlocBuilder<ProductCubit, ProductState>(
           builder: (context, state) {
             if (state is ProductLoading) {
@@ -97,9 +97,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              const Color(0xFF1A0B2E).withOpacity(0.5),
-                              const Color(0xFF1A0B2E).withOpacity(0.8),
-                              const Color(0xFF1A0B2E),
+                              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.5),
+                              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.8),
+                              Theme.of(context).scaffoldBackgroundColor,
                             ],
                           ),
                         ),
@@ -136,7 +136,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 margin: const EdgeInsets.only(top: AppDimensions.md, bottom: AppDimensions.xl),
                                 padding: const EdgeInsets.all(AppDimensions.md),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF2D1B4E), // Dark purple card
+                                  color: Theme.of(context).cardColor, // Dynamic card color
                                   borderRadius: BorderRadius.circular(24),
                                   border: Border.all(color: Colors.white.withOpacity(0.05)),
                                   boxShadow: [
@@ -157,8 +157,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         children: [
                                           Text(
                                             product.name,
-                                            style: const TextStyle(
-                                              color: Colors.white,
+                                            style: TextStyle(
+                                              color: Theme.of(context).colorScheme.onSurface,
                                               fontSize: 22,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -174,7 +174,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                               const SizedBox(width: 8),
                                               Text(
                                                 '5.0',
-                                                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.bold),
+                                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.bold),
                                               ),
                                             ],
                                           ),
@@ -197,7 +197,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 Text(
                                                   PriceFormatter.format(regularPrice),
                                                   style: TextStyle(
-                                                    color: Colors.white.withOpacity(0.5),
+                                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
                                                     fontSize: 14,
                                                     decoration: TextDecoration.lineThrough,
                                                   ),
@@ -212,7 +212,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                               maxLines: 4,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
-                                                color: Colors.white.withOpacity(0.7),
+                                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                                                 fontSize: 12,
                                                 height: 1.5,
                                               ),
@@ -243,7 +243,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 Center(
                                   child: Text(
                                     l10n.locale.languageCode == 'ar' ? 'البطاقة' : 'The Card',
-                                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 18, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                                 const SizedBox(height: AppDimensions.lg),
@@ -269,10 +269,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       child: AnimatedContainer(
                                         duration: const Duration(milliseconds: 200),
                                         decoration: BoxDecoration(
-                                          color: isSelected ? const Color(0xFF8C52FF).withOpacity(0.2) : const Color(0xFF22223B),
+                                          color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.2) : Theme.of(context).cardColor,
                                           borderRadius: BorderRadius.circular(16),
                                           border: Border.all(
-                                            color: isSelected ? const Color(0xFF8C52FF) : Colors.white.withOpacity(0.1),
+                                            color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor,
                                             width: isSelected ? 2 : 1,
                                           ),
                                         ),
@@ -280,7 +280,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           child: Text(
                                             label,
                                             style: TextStyle(
-                                              color: isSelected ? Colors.white : Colors.white.withOpacity(0.8),
+                                              color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
                                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                               fontSize: 16,
                                             ),
@@ -349,8 +349,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   AppDimensions.lg + MediaQuery.of(context).padding.bottom,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2D1B4E), // Match new dark purple card
-                  border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05), width: 1)),
+                  color: Theme.of(context).scaffoldBackgroundColor, // Dynamic bottom sheet background
+                  border: Border(top: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
                   boxShadow: [
                     BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, -10)),
                   ],
@@ -445,7 +445,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             children: [
               Text(
                 label,
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14, fontWeight: FontWeight.bold),
               ),
               if (isRequired)
                 const Text(' *', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -454,19 +454,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF22223B), // Dark input background
+              color: Theme.of(context).cardColor, // Adaptive background
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(color: Theme.of(context).dividerColor),
             ),
             child: TextField(
               controller: controller,
               onChanged: onChanged,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               decoration: InputDecoration(
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 hintText: '12345678',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
               ),
             ),
           ),
