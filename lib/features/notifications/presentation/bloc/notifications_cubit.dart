@@ -90,7 +90,7 @@ class NotificationsCubit extends Cubit<NotificationsState> {
     try {
       if (customerId == 0) return;
       
-      final response = await apiService.getCustomerOrders(customerId: customerId);
+      final response = await apiService.getCustomerOrders(page: 1, perPage: 10);
       if (response.statusCode == 200 && response.data is List) {
         final orders = response.data as List;
         final box = await Hive.openBox('notificationsBox');
@@ -164,18 +164,19 @@ class NotificationsCubit extends Cubit<NotificationsState> {
   }
 
   String _statusTitle(String status) {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'completed': return 'طلب مكتمل ✅';
       case 'processing': return 'طلب قيد المعالجة ⏳';
       case 'cancelled': return 'طلب ملغي ❌';
       case 'refunded': return 'طلب مسترد 💰';
       case 'on-hold': return 'طلب معلق ⏸️';
+      case 'failed': return 'طلب فاشل ❌';
       default: return 'تحديث طلب 📦';
     }
   }
 
   String _statusLabel(String status) {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'pending': return 'قيد الانتظار';
       case 'processing': return 'قيد المعالجة';
       case 'on-hold': return 'معلق';

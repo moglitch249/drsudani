@@ -23,5 +23,21 @@
   "welcome": "Welcome",
   "goodEvening": "Good Evening",
   "walletNumber": "Wallet Number",
-  "manageAccount": "Manage Account"
+  "manageAccount": "Manage Account",
+  "quickActions": "Quick Actions",
+  "ordersStatus": "Orders Status",
+  "loyaltyPoints": "Loyalty Points",
+  "points": "Points",
+  "support": "Support",
+  "theCard": "The Card",
+  "contactSupport": "Contact Support",
+  "buyNow": "Buy Now",
+  "pleaseSelectPackage": "Please select a package",
+  "pleaseEnter": "Please enter",
+  "enterPlayerId": "Please enter Player ID",
+  "categoryAll": "All",
+  "categoryDirectRecharge": "Direct Recharge",
+  "categoryGameCards": "Game Cards",
+  "categoryElectronicPayment": "Electronic Payment",
+  "searchGames": "Search games, cards..."
 }

@@ -69,9 +69,11 @@ class ApiService {
     );
   }
 
-  Future<Response<dynamic>> getCustomerOrders({required int customerId}) {
-    // We no longer need to pass customerId because the server extracts it securely from the JWT token!
-    return dio.get('/wp-json/drsudani/v1/orders');
+  Future<Response<dynamic>> getCustomerOrders({int page = 1, int perPage = 20}) {
+    return dio.get('/wp-json/drsudani/v1/orders', queryParameters: {
+      'page': page,
+      'per_page': perPage,
+    });
   }
 
   Future<Response<dynamic>> getCustomerProfile(int id) {

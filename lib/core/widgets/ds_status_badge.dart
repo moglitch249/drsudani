@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_dimensions.dart';
 
-enum OrderStatus { pending, processing, completed, cancelled }
+enum OrderStatus { pending, processing, completed, cancelled, refunded, failed, onHold }
 
 class DsStatusBadge extends StatelessWidget {
   final OrderStatus status;
@@ -21,6 +21,7 @@ class DsStatusBadge extends StatelessWidget {
 
     switch (status) {
       case OrderStatus.pending:
+      case OrderStatus.onHold:
         bgColor = AppTheme.warning.withOpacity(0.2);
         textColor = AppTheme.warning;
         break;
@@ -33,8 +34,13 @@ class DsStatusBadge extends StatelessWidget {
         textColor = AppTheme.success;
         break;
       case OrderStatus.cancelled:
+      case OrderStatus.failed:
         bgColor = AppTheme.error.withOpacity(0.2);
         textColor = AppTheme.error;
+        break;
+      case OrderStatus.refunded:
+        bgColor = Colors.grey.withOpacity(0.2);
+        textColor = Colors.grey.shade700;
         break;
     }
 

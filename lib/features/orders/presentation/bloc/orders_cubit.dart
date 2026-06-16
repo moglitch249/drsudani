@@ -39,7 +39,7 @@ class OrdersCubit extends Cubit<OrdersState> {
   Future<void> fetchOrders() async {
     emit(OrdersLoading());
     try {
-      final response = await apiService.getCustomerOrders(customerId: customerId);
+      final response = await apiService.getCustomerOrders(page: 1, perPage: 50);
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
         final orders = data.map((e) => OrderModel.fromMap(Map<String, dynamic>.from(e))).toList();

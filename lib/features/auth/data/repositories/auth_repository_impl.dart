@@ -4,6 +4,8 @@ import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_data_source.dart';
 import '../datasources/auth_local_data_source.dart';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 import '../models/user_model.dart';
 
 @LazySingleton(as: AuthRepository)
@@ -43,6 +45,18 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> logout() async {
+    try {
+      final token = Hive.box('auth').get('jwtToken');
+      if (token != null) {
+        await Dio().post(
+          'https://drsudani.com/wp-json/drsudani/v1/logout',
+          options: Options(headers: {
+            'Authorization': 'Bearer $token',
+            'X-App-Secret': 'DrSudaniAppSec2026x9k2P',
+          }),
+        );
+      }
+    } catch (_) {}
     await localDataSource.clearToken();
   }
 
@@ -51,10 +65,30 @@ class AuthRepositoryImpl implements AuthRepository {
     return localDataSource.hasToken();
   }
 
+  bool _isTokenExpired(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      final payloadStr = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final payload = jsonDecode(payloadStr);
+      final exp = payload['exp'] as int?;
+      if (exp == null) return true;
+      return exp < (DateTime.now().millisecondsSinceEpoch ~/ 1000);
+    } catch (_) {
+      return true;
+    }
+  }
+
   @override
   Future<User?> getCurrentUser() async {
     if (!localDataSource.hasToken()) return null;
-    final token = Hive.box('auth').get('jwtToken') ?? '';
+    final token = Hive.box('auth').get('jwtToken')?.toString() ?? '';
+    
+    if (token.isEmpty || _isTokenExpired(token)) {
+      await localDataSource.clearToken();
+      return null;
+    }
+
     return UserModel(
       id: localDataSource.getUserId() ?? 0,
       email: localDataSource.getUserEmail() ?? '',

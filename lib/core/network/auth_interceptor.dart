@@ -42,9 +42,23 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    // لا نحذف التوكن تلقائياً هنا لأن 401 قد يكون من endpoint محدد
-    // (مثل المحفظة) وليس بالضرورة أن التوكن منتهي
-    // التعامل مع 401 يتم داخل كل Cubit على حدة
+    if (err.response?.statusCode == 401) {
+      final token = Hive.box('auth').get('jwtToken');
+      if (token != null) {
+        // Clear locally
+        Hive.box('auth').delete('jwtToken');
+        Hive.box('auth').delete('userId');
+        
+        // Attempt to blacklist token on server
+        Dio().post(
+          'https://drsudani.com/wp-json/drsudani/v1/logout',
+          options: Options(headers: {
+            'Authorization': 'Bearer $token',
+            'X-App-Secret': _appSecret,
+          }),
+        ).catchError((_) => Response(requestOptions: RequestOptions(path: '')));
+      }
+    }
     super.onError(err, handler);
   }
 }

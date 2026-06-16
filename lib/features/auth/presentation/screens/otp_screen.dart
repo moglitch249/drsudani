@@ -21,9 +21,10 @@ class OtpScreen extends StatefulWidget {
 
 class _OtpScreenState extends State<OtpScreen> {
   String currentText = "";
-  int _secondsRemaining = 28;
+  int _secondsRemaining = 60;
   Timer? _timer;
   bool _hasError = false;
+  int _attempts = 0;
 
   @override
   void initState() {
@@ -33,7 +34,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
   void startTimer() {
     setState(() {
-      _secondsRemaining = 28;
+      _secondsRemaining = 60;
     });
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_secondsRemaining > 0) {
@@ -140,6 +141,7 @@ class _OtpScreenState extends State<OtpScreen> {
                             animationDuration: const Duration(milliseconds: 300),
                             backgroundColor: Colors.transparent,
                             enableActiveFill: true,
+                            keyboardType: TextInputType.number,
                             onChanged: (value) {
                               setState(() {
                                 currentText = value;
@@ -147,6 +149,13 @@ class _OtpScreenState extends State<OtpScreen> {
                               });
                             },
                             onCompleted: (v) {
+                              if (_attempts >= 3) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('تم تجاوز عدد المحاولات المسموحة. يرجى إعادة المحاولة لاحقاً.'), backgroundColor: AppTheme.error),
+                                );
+                                return;
+                              }
+                              _attempts++;
                               context.read<AuthBloc>().add(
                                 VerifyWhatsAppOtpEvent(widget.phone, v)
                               );
@@ -158,6 +167,13 @@ class _OtpScreenState extends State<OtpScreen> {
                             isLoading: state is AuthLoading,
                             onPressed: currentText.length == 6
                                 ? () {
+                                    if (_attempts >= 3) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('تم تجاوز عدد المحاولات المسموحة.'), backgroundColor: AppTheme.error),
+                                      );
+                                      return;
+                                    }
+                                    _attempts++;
                                     context.read<AuthBloc>().add(
                                       VerifyWhatsAppOtpEvent(widget.phone, currentText)
                                     );

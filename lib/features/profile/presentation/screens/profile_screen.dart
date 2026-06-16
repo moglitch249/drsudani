@@ -23,6 +23,8 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late Timer _timer;
   String _greetingKey = 'goodEvening';
+  final PageController _pageController = PageController();
+  int _currentCardIndex = 0;
 
   @override
   void initState() {
@@ -34,6 +36,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _timer.cancel();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -111,9 +114,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 BlocBuilder<AuthBloc, AuthState>(
                                   builder: (context, state) {
                                     String name = 'مستخدم';
-                                    if (state is AuthSuccess) {
-                                      name = state.user.firstName.isNotEmpty ? state.user.firstName : state.user.email.split('@')[0];
-                                    }
+                                      if (state is AuthSuccess) {
+                                        final fName = state.user.firstName.trim();
+                                        name = fName.isNotEmpty ? fName : state.user.email.split('@')[0];
+                                      }
                                     return Text(
                                       name,
                                       style: TextStyle(
@@ -153,7 +157,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.lg),
-                      child: _buildWalletCard(context, l10n),
+                      child: Column(
+                        children: [
+                          Stack(
+                            alignment: Alignment.bottomCenter,
+                            children: [
+                              SizedBox(
+                                height: 200,
+                                child: PageView(
+                                  controller: _pageController,
+                                  onPageChanged: (index) {
+                                    setState(() => _currentCardIndex = index);
+                                  },
+                                  children: [
+                                    _buildWalletCard(context, l10n),
+                                    _buildOrdersStatCard(context, l10n),
+                                    _buildPointsCard(context, l10n),
+                                    _buildSupportCard(context, l10n),
+                                  ],
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 16,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: List.generate(4, (index) => Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                                    width: _currentCardIndex == index ? 24 : 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: _currentCardIndex == index 
+                                          ? Colors.white 
+                                          : Colors.white.withOpacity(0.4),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  )),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: AppDimensions.xl),
                     Padding(
@@ -230,7 +274,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildWalletCard(BuildContext context, AppLocalizations l10n) {
     return Container(
       width: double.infinity,
-      height: 200,
       padding: const EdgeInsets.all(AppDimensions.xl),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
@@ -260,7 +303,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           String userName = 'User';
           final authState = context.read<AuthBloc>().state;
           if (authState is AuthSuccess) {
-            userName = authState.user.firstName;
+            final fName = authState.user.firstName.trim();
+            userName = fName.isNotEmpty ? fName : authState.user.email.split('@')[0];
           }
 
           return Column(
@@ -305,20 +349,153 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Text(l10n.locale.languageCode == 'ar' ? 'ج.س' : 'SDG', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: List.generate(4, (index) => Container(
-                  margin: const EdgeInsets.only(right: 4),
-                  width: 6, height: 6,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(index == 0 ? 1 : 0.4),
-                    shape: BoxShape.circle,
-                  ),
-                )),
-              ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildOrdersStatCard(BuildContext context, AppLocalizations l10n) {
+    final isAr = l10n.locale.languageCode == 'ar';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.xl),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF00B894), Color(0xFF00CEC9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00B894).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(isAr ? 'حالة الطلبات' : 'Orders Status', style: const TextStyle(color: Colors.white)),
+          ),
+          const Spacer(),
+          Text(isAr ? 'تتبع طلباتك بسهولة' : 'Track your orders easily', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () => context.go('/orders'),
+            icon: const Icon(Icons.local_shipping, size: 18, color: Color(0xFF00B894)),
+            label: Text(isAr ? 'عرض الطلبات' : 'View Orders', style: const TextStyle(color: Color(0xFF00B894))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPointsCard(BuildContext context, AppLocalizations l10n) {
+    final isAr = l10n.locale.languageCode == 'ar';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.xl),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFDCB6E), Color(0xFFE17055)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE17055).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(isAr ? 'نقاط الولاء' : 'Loyalty Points', style: const TextStyle(color: Colors.white)),
+          ),
+          const Spacer(),
+          Text(isAr ? 'اجمع النقاط واستبدلها' : 'Collect points and redeem', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              const Text('0', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              Text(isAr ? 'نقطة' : 'Pts', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupportCard(BuildContext context, AppLocalizations l10n) {
+    final isAr = l10n.locale.languageCode == 'ar';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.xl),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0984E3), Color(0xFF74B9FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0984E3).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(isAr ? 'الدعم الفني' : 'Support', style: const TextStyle(color: Colors.white)),
+          ),
+          const Spacer(),
+          Text(isAr ? 'نحن هنا لمساعدتك' : 'We are here to help', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.headset_mic, size: 18, color: Color(0xFF0984E3)),
+            label: Text(isAr ? 'تواصل معنا' : 'Contact Us', style: const TextStyle(color: Color(0xFF0984E3))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          ),
+        ],
       ),
     );
   }

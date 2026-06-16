@@ -13,8 +13,7 @@ import '../../../../core/widgets/ds_text_field.dart';
 import '../bloc/product_cubit.dart';
 import '../bloc/product_state.dart';
 import '../../../../core/di/injection.dart';
-import '../../../cart/data/models/cart_item_model.dart';
-import '../../../cart/presentation/bloc/cart_cubit.dart';
+import '../../../checkout/data/models/checkout_item_model.dart';
 import '../../data/models/product_model.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -44,7 +43,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return BlocProvider(
-      create: (context) => getIt<ProductCubit>()..getProductById(int.parse(widget.productId)),
+      create: (context) => getIt<ProductCubit>()..getProductById(int.tryParse(widget.productId) ?? 0),
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Dynamic background
         body: BlocBuilder<ProductCubit, ProductState>(
@@ -73,32 +72,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
               return Stack(
                 children: [
-                  // Blurred Background Image
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: MediaQuery.of(context).size.height * 0.45,
+                  // Blurred Background Image (Fixed Scroll Issue by filling screen)
+                  Positioned.fill(
                     child: CachedNetworkImage(
                       imageUrl: product.imageUrl.isNotEmpty ? product.imageUrl : 'error',
                       fit: BoxFit.cover,
                       errorWidget: (context, url, error) => Image.asset('assets/images/drsudani.png', fit: BoxFit.cover),
                     ),
                   ),
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: MediaQuery.of(context).size.height * 0.45,
+                  Positioned.fill(
                     child: BackdropFilter(
-                      filter: dart_ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      filter: dart_ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.5),
+                              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.4),
                               Theme.of(context).scaffoldBackgroundColor.withOpacity(0.8),
                               Theme.of(context).scaffoldBackgroundColor,
                             ],
@@ -148,109 +139,154 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     ),
                                   ],
                                 ),
-                                child: Row(
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Left side: Text
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            product.name,
-                                            style: TextStyle(
-                                              color: Theme.of(context).colorScheme.onSurface,
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          // Stock status badge
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: product.stockStatus == 'instock'
-                                                  ? AppTheme.success.withOpacity(0.1)
-                                                  : AppTheme.error.withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(20),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Container(
-                                                  width: 6, height: 6,
-                                                  decoration: BoxDecoration(
-                                                    color: product.stockStatus == 'instock' ? AppTheme.success : AppTheme.error,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Text(
-                                                  product.stockStatus == 'instock' ? 'متوفر' : 'غير متوفر',
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: product.stockStatus == 'instock' ? AppTheme.success : AppTheme.error,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          // Price Display
-                                          Row(
-                                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                                            textBaseline: TextBaseline.alphabetic,
+                                    // Row 1: Content on Left, Image on Right
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                PriceFormatter.format(finalPrice),
-                                                style: const TextStyle(
-                                                  color: AppTheme.success,
-                                                  fontSize: 24,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                              Row(
+                                                crossAxisAlignment: CrossAxisAlignment.center,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      product.name,
+                                                      style: TextStyle(
+                                                        color: Theme.of(context).colorScheme.onSurface,
+                                                        fontSize: 22,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  // Stock status badge
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: product.stockStatus == 'instock'
+                                                          ? AppTheme.success.withOpacity(0.1)
+                                                          : AppTheme.error.withOpacity(0.1),
+                                                      borderRadius: BorderRadius.circular(20),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Container(
+                                                          width: 6, height: 6,
+                                                          decoration: BoxDecoration(
+                                                            color: product.stockStatus == 'instock' ? AppTheme.success : AppTheme.error,
+                                                            shape: BoxShape.circle,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 6),
+                                                        Text(
+                                                          product.stockStatus == 'instock' ? 'متوفر' : 'غير متوفر',
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: product.stockStatus == 'instock' ? AppTheme.success : AppTheme.error,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                              if (regularPrice > finalPrice) ...[
-                                                const SizedBox(width: 8),
+                                              const SizedBox(height: 8),
+                                              if (product.description.isNotEmpty)
                                                 Text(
-                                                  PriceFormatter.format(regularPrice),
+                                                  product.description,
+                                                  maxLines: 4,
+                                                  overflow: TextOverflow.ellipsis,
                                                   style: TextStyle(
-                                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                                                    fontSize: 14,
-                                                    decoration: TextDecoration.lineThrough,
+                                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                                                    fontSize: 12,
+                                                    height: 1.5,
                                                   ),
                                                 ),
-                                              ],
                                             ],
                                           ),
-                                          const SizedBox(height: 12),
-                                          if (product.description.isNotEmpty)
-                                            Text(
-                                              product.description,
-                                              maxLines: 4,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                                                fontSize: 12,
-                                                height: 1.5,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        // Right side: Image and Price under it
+                                        Column(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(16),
+                                              child: SizedBox(
+                                                width: 100,
+                                                height: 100,
+                                                child: CachedNetworkImage(
+                                                  imageUrl: product.imageUrl.isNotEmpty ? product.imageUrl : 'error',
+                                                  fit: BoxFit.cover,
+                                                  errorWidget: (context, url, error) => Image.asset('assets/images/drsudani.png', fit: BoxFit.cover),
+                                                ),
                                               ),
                                             ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    // Right side: Image
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: SizedBox(
-                                        width: 100,
-                                        height: 100,
-                                        child: CachedNetworkImage(
-                                          imageUrl: product.imageUrl.isNotEmpty ? product.imageUrl : 'error',
-                                          fit: BoxFit.cover,
-                                          errorWidget: (context, url, error) => Image.asset('assets/images/drsudani.png', fit: BoxFit.cover),
+                                            const SizedBox(height: 12),
+                                            Directionality(
+                                              textDirection: l10n.locale.languageCode == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                                textBaseline: TextBaseline.alphabetic,
+                                                children: [
+                                                  Text(
+                                                    PriceFormatter.format(finalPrice),
+                                                    style: const TextStyle(
+                                                      color: AppTheme.success,
+                                                      fontSize: 22,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    l10n.locale.languageCode == 'ar' ? 'ج.س' : 'SDG',
+                                                    style: TextStyle(
+                                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (regularPrice > finalPrice) ...[
+                                              const SizedBox(height: 4),
+                                              Directionality(
+                                                textDirection: l10n.locale.languageCode == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      PriceFormatter.format(regularPrice),
+                                                      style: TextStyle(
+                                                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                                        fontSize: 12,
+                                                        decoration: TextDecoration.lineThrough,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      l10n.locale.languageCode == 'ar' ? 'ج.س' : 'SDG',
+                                                      style: TextStyle(
+                                                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                                                        fontSize: 10,
+                                                        decoration: TextDecoration.lineThrough,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -376,40 +412,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 child: SafeArea(
                   child: Row(
                     children: [
-                      // Add to Cart Button
-                      Container(
-                        height: 56,
-                        width: 56,
-                        margin: const EdgeInsets.only(left: 12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Theme.of(context).dividerColor),
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              HapticFeedback.lightImpact();
-                              if (_addToCart(context, state, l10n, showValidationSnackbar: true)) {
-                                ScaffoldMessenger.of(context).clearSnackBars();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(l10n.addedToCart),
-                                    backgroundColor: AppTheme.success,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            },
-                            child: const Icon(Icons.add_shopping_cart_outlined, color: AppTheme.primary, size: 24),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
+
                       // Buy Now Button
                       Expanded(
                         child: Container(
@@ -433,16 +436,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             color: Colors.transparent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(16),
-                              onTap: () async {
+                              onTap: () {
                                 HapticFeedback.lightImpact();
                                 if (_isFastBuyInProgress) return;
                                 setState(() => _isFastBuyInProgress = true);
                                 try {
-                                  if (_addToCart(context, state, l10n, showValidationSnackbar: true)) {
-                                    await context.read<CartCubit>().clearCart();
-                                    if (!mounted) return;
-                                    _addToCart(context, state, l10n, showValidationSnackbar: false);
-                                    context.push('/checkout');
+                                  final checkoutItem = _validateAndGetCheckoutItem(context, state, l10n);
+                                  if (checkoutItem != null) {
+                                    context.push('/checkout', extra: checkoutItem);
                                   }
                                 } finally {
                                   if (mounted) setState(() => _isFastBuyInProgress = false);
@@ -536,37 +537,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  bool _addToCart(BuildContext context, ProductDetailLoaded state, AppLocalizations l10n, {bool showValidationSnackbar = true}) {
+  CheckoutItem? _validateAndGetCheckoutItem(BuildContext context, ProductDetailLoaded state, AppLocalizations l10n) {
     final product = state.product;
     final variations = state.variations;
 
     if (variations.isNotEmpty && _selectedVariation == null) {
-      if (showValidationSnackbar) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.pleaseSelectPackage), backgroundColor: AppTheme.error));
-      }
-      return false;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.pleaseSelectPackage), backgroundColor: AppTheme.error));
+      return null;
     }
 
     for (var addon in product.addons) {
       if (addon.required) {
         final val = _customAddonValues[addon.name]?.trim() ?? '';
         if (val.isEmpty) {
-          if (showValidationSnackbar) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${l10n.pleaseEnter} ${addon.name}'), backgroundColor: AppTheme.error));
-          }
-          return false;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${l10n.pleaseEnter} ${addon.name}'), backgroundColor: AppTheme.error));
+          return null;
         }
       }
     }
     
-    // Check our Bot Auto Topup Player ID
     if (product.isBotAutoTopup) {
       final val = _customAddonValues['Player ID']?.trim() ?? '';
       if (val.isEmpty) {
-        if (showValidationSnackbar) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.enterPlayerId), backgroundColor: AppTheme.error));
-        }
-        return false;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.enterPlayerId), backgroundColor: AppTheme.error));
+        return null;
       }
     }
 
@@ -577,28 +571,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final double regularPrice = _selectedVariation != null
         ? double.tryParse(_selectedVariation!.regularPrice) ?? price
         : double.tryParse(product.regularPrice) ?? price;
-        
-    final String variationLabel = _selectedVariation != null ? _selectedVariation!.attributes.values.join(' - ') : '';
 
     final Map<String, dynamic> addonsToSave = Map.from(_customAddonValues);
     final String playerId = addonsToSave.remove('Player ID') ?? '';
 
-    final cartItem = CartItemModel(
-      product: product,
-      quantity: 1,
-      selectedVariation: variationLabel,
+    return CheckoutItem(
+      productId: product.id,
       variationId: _selectedVariation?.id,
+      productName: product.name,
       price: price,
       regularPrice: regularPrice,
-      customField: playerId,
-      customAddons: addonsToSave.isNotEmpty ? addonsToSave : null,
+      playerId: playerId,
+      addons: addonsToSave.isNotEmpty ? addonsToSave : null,
     );
-
-    context.read<CartCubit>().addToCart(cartItem);
-    
-    // We intentionally removed the "Added to cart" success snackbar here 
-    // because we bypass the cart completely and go to checkout!
-    
-    return true;
   }
 }

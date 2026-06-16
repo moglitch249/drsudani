@@ -12,7 +12,7 @@ class LoginWithEmailEvent extends AuthEvent {
   final String password;
   const LoginWithEmailEvent(this.email, this.password);
   @override
-  List<Object?> get props => [email, password];
+  List<Object?> get props => [email]; // removed password from props
 }
 
 class RegisterWithEmailEvent extends AuthEvent {
@@ -22,7 +22,7 @@ class RegisterWithEmailEvent extends AuthEvent {
   final String lastName;
   const RegisterWithEmailEvent(this.email, this.password, this.firstName, this.lastName);
   @override
-  List<Object?> get props => [email, password, firstName, lastName];
+  List<Object?> get props => [email, firstName, lastName]; // removed password from props
 }
 
 class RequestWhatsAppOtpEvent extends AuthEvent {
@@ -51,6 +51,8 @@ abstract class AuthState extends Equatable {
 }
 
 class AuthInitial extends AuthState {}
+
+class AuthUnauthenticated extends AuthState {}
 
 class AuthLoading extends AuthState {}
 

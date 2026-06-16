@@ -17,7 +17,6 @@ import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_state_event.dart';
 import 'features/home/presentation/bloc/home_cubit.dart';
 import 'features/product/presentation/bloc/product_cubit.dart';
-import 'features/cart/presentation/bloc/cart_cubit.dart';
 import 'features/profile/presentation/bloc/wallet_cubit.dart';
 import 'features/notifications/presentation/bloc/notifications_cubit.dart';
 import 'features/auth/data/datasources/auth_local_data_source.dart';
@@ -45,32 +44,33 @@ void main() async {
   final encryptionKeyUint8List = base64Url.decode(encryptionKeyString!);
   final cipher = HiveAesCipher(encryptionKeyUint8List);
 
+  // الدالة المساعدة لترحيل البيانات من صندوق غير مشفر إلى مشفر
+  Future<void> openAndMigrateBox(String boxName, HiveAesCipher cipher) async {
+    try {
+      // محاولة فتح الصندوق بالتشفير
+      await Hive.openBox(boxName, encryptionCipher: cipher);
+    } catch (e) {
+      // إذا فشل (غالباً لأنه غير مشفر)، نفتحه بدون تشفير
+      final unencryptedBox = await Hive.openBox(boxName);
+      final data = unencryptedBox.toMap();
+      await unencryptedBox.close();
+      
+      // نحذف القديم
+      await Hive.deleteBoxFromDisk(boxName);
+      
+      // ننشئ الجديد المشفر وننقل البيانات
+      final encryptedBox = await Hive.openBox(boxName, encryptionCipher: cipher);
+      if (data.isNotEmpty) {
+        await encryptedBox.putAll(data);
+      }
+    }
+  }
+
   // === 2. فتح الصناديق بتشفير قوي ===
   await Hive.openBox('settings'); // إعدادات التطبيق لا تحتاج تشفير قوي
   await Hive.openBox('notificationsBox');
   
-  try {
-    await Hive.openBox('auth', encryptionCipher: cipher);
-  } catch (e) {
-    // إذا كانت البيانات القديمة غير مشفرة، نحذفها وننشئها مشفرة (سيحتاج المستخدم لتسجيل الدخول مجدداً)
-    await Hive.deleteBoxFromDisk('auth');
-    await Hive.openBox('auth', encryptionCipher: cipher);
-  }
-
-  try {
-    await Hive.openBox('cart', encryptionCipher: cipher);
-  } catch (e) {
-    await Hive.deleteBoxFromDisk('cart');
-    await Hive.openBox('cart', encryptionCipher: cipher);
-  }
-
-  // === cartBox (بيانات السلة بما فيها الـ Player ID - يجب تشفيرها) ===
-  try {
-    await Hive.openBox('cartBox', encryptionCipher: cipher);
-  } catch (e) {
-    await Hive.deleteBoxFromDisk('cartBox');
-    await Hive.openBox('cartBox', encryptionCipher: cipher);
-  }
+  await openAndMigrateBox('auth', cipher);
 
   runApp(const MyApp());
 }
@@ -133,8 +133,8 @@ class _AppLifecycleManagerState extends State<AppLifecycleManager> with WidgetsB
     } else if (state == AppLifecycleState.resumed) {
       if (_backgroundTime != null) {
         final diff = DateTime.now().difference(_backgroundTime!);
-        if (diff.inMinutes >= 1) {
-          // بعد دقيقة من الخمول سيتم قفل التطبيق (Background Lock)
+        if (diff.inMinutes >= 5) {
+          // بعد 5 دقائق من الخمول سيتم قفل التطبيق (Background Lock)
           setState(() => _isLocked = true);
         } else {
           setState(() => _isLocked = false);
@@ -190,36 +190,59 @@ class _AppLifecycleManagerState extends State<AppLifecycleManager> with WidgetsB
                   const SizedBox(height: 20),
                   const Text('تم قفل التطبيق لحماية بياناتك', style: TextStyle(color: Colors.white, fontSize: 18)),
                   const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final LocalAuthentication auth = LocalAuthentication();
-                      final bool canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
-                      final bool canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
-                      
-                      if (canAuthenticate) {
-                        try {
-                          final bool didAuthenticate = await auth.authenticate(
-                            localizedReason: 'يرجى التحقق من هويتك لفتح التطبيق',
-                            options: const AuthenticationOptions(
-                              biometricOnly: false,
-                              stickyAuth: true,
-                            ),
-                          );
-                          if (didAuthenticate) {
-                            setState(() => _isLocked = false);
+                    ElevatedButton(
+                      onPressed: () {
+                        // إظهار نافذة إدخال رمز المرور (PIN)
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) {
+                            String pin = '';
+                            String? errorMsg;
+                            return StatefulBuilder(
+                              builder: (context, setDialogState) {
+                                return AlertDialog(
+                                  title: const Text('أدخل رمز المرور', textAlign: TextAlign.center),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text('بشكل افتراضي: 0000', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                      const SizedBox(height: 10),
+                                      TextField(
+                                        keyboardType: TextInputType.number,
+                                        obscureText: true,
+                                        maxLength: 4,
+                                        textAlign: TextAlign.center,
+                                        decoration: InputDecoration(
+                                          errorText: errorMsg,
+                                          counterText: '',
+                                        ),
+                                        onChanged: (val) {
+                                          pin = val;
+                                          if (pin.length == 4) {
+                                            // في المستقبل يمكن ربطها مع Hive('settings')
+                                            if (pin == '0000') {
+                                              Navigator.pop(context);
+                                              setState(() => _isLocked = false);
+                                            } else {
+                                              setDialogState(() => errorMsg = 'رمز المرور غير صحيح');
+                                            }
+                                          } else {
+                                            setDialogState(() => errorMsg = null);
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                            );
                           }
-                        } catch (e) {
-                          // Fallback to unlock if error happens
-                          setState(() => _isLocked = false);
-                        }
-                      } else {
-                        // If no biometrics, just unlock
-                        setState(() => _isLocked = false);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1)),
-                    child: const Text('فتح التطبيق', style: TextStyle(color: Colors.white)),
-                  )
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1)),
+                      child: const Text('فتح التطبيق', style: TextStyle(color: Colors.white)),
+                    )
                 ],
               ),
             ),
@@ -240,7 +263,6 @@ class MyApp extends StatelessWidget {
         BlocProvider<ThemeCubit>(create: (_) => ThemeCubit()..loadSavedTheme()),
         BlocProvider<AuthBloc>(create: (_) => getIt<AuthBloc>()),
         BlocProvider<ProductCubit>(create: (_) => getIt<ProductCubit>()),
-        BlocProvider<CartCubit>(create: (_) => CartCubit()),
         BlocProvider<WalletCubit>(create: (_) => WalletCubit(getIt<ApiService>())),
         BlocProvider<NotificationsCubit>(create: (_) {
           final localDs = getIt<AuthLocalDataSource>();
@@ -256,8 +278,6 @@ class MyApp extends StatelessWidget {
           if (authState is AuthSuccess) {
             context.read<WalletCubit>().fetchWalletData(authToken: authState.user.token);
             context.read<NotificationsCubit>().checkForUpdates();
-          } else if (authState is AuthInitial || authState is AuthError) {
-            context.read<CartCubit>().clearCart();
           }
         },
         child: BlocBuilder<LocaleCubit, Locale>(

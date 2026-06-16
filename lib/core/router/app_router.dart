@@ -15,6 +15,7 @@ import '../../features/auth/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/otp_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../../features/checkout/data/models/checkout_item_model.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/profile/presentation/screens/wallet_screen.dart';
 import '../../features/product/presentation/screens/product_detail_screen.dart';
@@ -32,7 +33,6 @@ import '../utils/tour_keys.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../theme/app_theme.dart';
-import '../../features/cart/presentation/screens/cart_screen.dart';
 import '../../features/checkout/presentation/screens/checkout_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
 
@@ -48,60 +48,48 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<AuthBloc>().add(CheckAuthStatusEvent());
-    
-    Future.delayed(const Duration(milliseconds: 3000), () {
+    // تأخير بسيط لعرض الأنيميشن
+    Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
-        final isFirstTime = Hive.box('settings').get('isFirstTime', defaultValue: true);
-        if (isFirstTime) {
-          context.go('/onboarding');
-          return;
-        }
-
-        final authState = context.read<AuthBloc>().state;
-        if (authState is AuthSuccess) {
-          context.go('/home');
-        } else {
-          context.go('/login');
-        }
+        context.read<AuthBloc>().add(CheckAuthStatusEvent());
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Adaptive background
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthInitial || state is AuthLoading) return;
+        
+        final isFirstTime = Hive.box('settings').get('isFirstTime', defaultValue: true);
+        if (isFirstTime) {
+          context.go('/onboarding');
+        } else if (state is AuthSuccess) {
+          context.go('/home');
+        } else {
+          // حالة AuthUnauthenticated أو Error
+          context.go('/login');
+        }
+      },
+      child: Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(
               'assets/images/drsudani.png',
-              width: 220, 
+              width: 280,
               errorBuilder: (context, error, stackTrace) => 
                 const Icon(Icons.gamepad, size: 100, color: AppTheme.primary),
             )
-            .animate()
-            .scale(duration: 1000.ms, curve: Curves.easeOutBack)
-            .fadeIn(duration: 1000.ms),
-            
-            const SizedBox(height: 24),
-            
-            Text(
-              'دكتور الألعاب في السودان',
-              style: GoogleFonts.cairo(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.primary,
-                letterSpacing: 1.0,
-              ),
-            )
-            .animate()
-            .slideY(begin: 1.5, end: 0, duration: 900.ms, delay: 600.ms, curve: Curves.easeOutCubic)
-            .fadeIn(duration: 900.ms, delay: 600.ms),
+            .animate(onPlay: (controller) => controller.repeat(reverse: true))
+            .fade(begin: 0.3, end: 1.0, duration: 800.ms, curve: Curves.easeInOut)
+            .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.0, 1.0), duration: 800.ms),
           ],
         ),
+      ),
       ),
     );
   }
@@ -126,8 +114,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
-      builder: Builder(
-        builder: (context) => Scaffold(
+      builder: (context) => Scaffold(
           extendBody: true,
           body: navigationShell,
           bottomNavigationBar: Padding(
@@ -195,7 +182,6 @@ class ScaffoldWithNavBar extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -249,23 +235,18 @@ class _NavBarItem extends StatelessWidget {
 }
 
 class AppRouter {
-  static CustomTransitionPage _buildPageWithTransition({
-    required BuildContext context, 
-    required GoRouterState state, 
+  static CustomTransitionPage _buildPageWithTransition<T>({
+    required BuildContext context,
+    required GoRouterState state,
     required Widget child,
   }) {
-    return CustomTransitionPage(
+    // استخدمنا FadeTransition بدلاً من SlideTransition الثقيل لتحسين الأداء وتسريع التنقل
+    return CustomTransitionPage<T>(
       key: state.pageKey,
       child: child,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(1, 0),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          )),
+        return FadeTransition(
+          opacity: animation,
           child: child,
         );
       },
@@ -274,18 +255,35 @@ class AppRouter {
 
   static final router = GoRouter(
     initialLocation: '/splash',
+    redirect: (context, state) {
+      final protectedRoutes = ['/wallet', '/checkout', '/profile', '/settings'];
+      final isProtectedRoute = protectedRoutes.contains(state.uri.path);
+      
+      if (isProtectedRoute) {
+        final token = Hive.box('auth').get('jwtToken');
+        if (token == null || token.toString().isEmpty) {
+          return '/login';
+        }
+      }
+      return null;
+    },
     routes: [
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
-        path: '/cart',
-        pageBuilder: (context, state) => _buildPageWithTransition(context: context, state: state, child: const CartScreen()),
-      ),
-      GoRoute(
         path: '/checkout',
-        pageBuilder: (context, state) => _buildPageWithTransition(context: context, state: state, child: const CheckoutScreen()),
+        builder: (context, state) {
+          final item = state.extra as CheckoutItem?;
+          if (item == null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              context.go('/home');
+            });
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
+          return CheckoutScreen(item: item);
+        },
       ),
       GoRoute(
         path: '/notifications',
@@ -318,10 +316,10 @@ class AppRouter {
         },
       ),
       GoRoute(
-        path: '/category/:id/:name',
+        path: '/category/:id',
         pageBuilder: (context, state) {
           final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
-          final name = state.pathParameters['name'] ?? '';
+          final name = state.uri.queryParameters['name'] ?? '';
           return _buildPageWithTransition(context: context, state: state, child: CategoryScreen(categoryId: id, categoryName: name));
         },
       ),
@@ -371,7 +369,11 @@ class AppRouter {
                 path: '/order-success/:id',
                 builder: (context, state) {
                   final orderId = state.pathParameters['id'] ?? '';
-                  return OrderSuccessScreen(orderId: orderId);
+                  final extra = state.extra as Map<String, dynamic>?;
+                  return OrderSuccessScreen(
+                    orderId: orderId,
+                    extraData: extra,
+                  );
                 },
               ),
               GoRoute(

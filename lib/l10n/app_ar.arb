@@ -23,5 +23,21 @@
   "welcome": "مرحباً",
   "goodEvening": "مساء النور",
   "walletNumber": "رقم المحفظة",
-  "manageAccount": "إدارة حسابي"
+  "manageAccount": "إدارة حسابي",
+  "quickActions": "إجراءات سريعة",
+  "ordersStatus": "حالة الطلبات",
+  "loyaltyPoints": "نقاط الولاء",
+  "points": "النقاط",
+  "support": "الدعم",
+  "theCard": "البطاقة",
+  "contactSupport": "تواصل مع الدعم",
+  "buyNow": "اشتر الآن",
+  "pleaseSelectPackage": "يرجى اختيار باقة",
+  "pleaseEnter": "يرجى إدخال",
+  "enterPlayerId": "يرجى إدخال آيدي اللاعب (Player ID)",
+  "categoryAll": "الكل",
+  "categoryDirectRecharge": "شحن مباشر",
+  "categoryGameCards": "بطاقات ألعاب",
+  "categoryElectronicPayment": "دفع إلكتروني",
+  "searchGames": "ابحث عن ألعاب، بطاقات..."
 }

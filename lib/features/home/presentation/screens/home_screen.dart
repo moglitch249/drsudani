@@ -20,8 +20,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/l10n/app_localizations.dart';
 import '../../../notifications/presentation/bloc/notifications_cubit.dart';
-import '../../../cart/presentation/bloc/cart_cubit.dart';
-import '../../../cart/presentation/bloc/cart_state.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state_event.dart';
 import '../../../../core/utils/price_formatter.dart';
@@ -29,6 +27,8 @@ import 'package:flutter/services.dart';
 import 'package:showcaseview/showcaseview.dart';
 import '../../../../core/utils/tour_keys.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../core/di/injection.dart';
+import '../../../../core/network/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -445,13 +445,51 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       ),
                     ),
-                    const Text(
-                      'متابعة حالة الطلبات',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.success,
-                      ),
+                    BlocBuilder<AuthBloc, AuthState>(
+                      builder: (context, authState) {
+                        if (authState is AuthSuccess) {
+                          return FutureBuilder<dynamic>(
+                            future: getIt<ApiService>().getCustomerOrders(page: 1, perPage: 1),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData && snapshot.data?.statusCode == 200) {
+                                final orders = snapshot.data!.data as List;
+                                if (orders.isNotEmpty) {
+                                  final status = orders.first['status'] ?? '';
+                                  final orderId = orders.first['id'] ?? '';
+                                  String statusText = 'قيد المعالجة';
+                                  if (status == 'completed') statusText = 'مكتمل';
+                                  if (status == 'pending') statusText = 'قيد الانتظار';
+                                  if (status == 'cancelled') statusText = 'ملغي';
+                                  return Text(
+                                    'طلب #$orderId $statusText',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.success,
+                                    ),
+                                  );
+                                }
+                              }
+                              return const Text(
+                                'متابعة حالة الطلبات',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.success,
+                                ),
+                              );
+                            },
+                          );
+                        }
+                        return const Text(
+                          'متابعة حالة الطلبات',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.success,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -551,13 +589,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
   Widget _buildCategoryCard(BuildContext context, ProductCategory cat) {
     return GestureDetector(
       onTap: () {
-        context.push('/category/${cat.id}/${Uri.encodeComponent(cat.name)}');
+        context.push('/category/${cat.id}?name=${Uri.encodeQueryComponent(cat.name)}');
       },
       child: Container(
         width: 80,
@@ -728,7 +767,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(l10n.latestArticles, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+              Text(l10n.locale.languageCode == 'ar' ? 'أخبار عالم الألعاب' : 'Gaming World News', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
               TextButton(
                 onPressed: () async {
                   final url = Uri.parse('https://drsudani.com/blog');

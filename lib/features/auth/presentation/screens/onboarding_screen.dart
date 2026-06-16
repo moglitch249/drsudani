@@ -91,81 +91,89 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           
           // Removed language switcher as text is Arabic only
           
-          // Wavy Shape to hide original image text and show our text
+          // Card Shape to hide original image text and show our text
           Align(
             alignment: Alignment.bottomCenter,
-            child: ClipPath(
-              clipper: OnboardingWaveClipper(),
-              child: Container(
-                height: MediaQuery.of(context).size.height * 0.45, // Tall enough to cover original image text
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
+            child: Container(
+              height: MediaQuery.of(context).size.height * 0.42, // Adjusted height
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(40),
+                  topRight: Radius.circular(40),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(AppDimensions.xl, 60, AppDimensions.xl, AppDimensions.xl),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      // Dots Indicator
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          _items.length,
-                          (index) => AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            height: 8,
-                            width: _currentIndex == index ? 24 : 8,
-                            decoration: BoxDecoration(
-                              color: _currentIndex == index ? AppTheme.primary : AppTheme.textMuted.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
+                  )
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppDimensions.xl, 40, AppDimensions.xl, AppDimensions.xl),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    // Dots Indicator
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _items.length,
+                        (index) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          height: 8,
+                          width: _currentIndex == index ? 24 : 8,
+                          decoration: BoxDecoration(
+                            color: _currentIndex == index ? AppTheme.primary : AppTheme.textMuted.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                         ),
                       ),
-                      const SizedBox(height: AppDimensions.xl),
-                      
-                      // Title
-                      Text(
-                        _items[_currentIndex].title,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                    ),
+                    const SizedBox(height: AppDimensions.xl),
+                    
+                    // Title
+                    Text(
+                      _items[_currentIndex].title,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
-                      const SizedBox(height: AppDimensions.sm),
-                      
-                      // Description
-                      Text(
-                        _items[_currentIndex].description,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: AppTheme.textMuted,
-                          height: 1.5,
-                        ),
+                    ),
+                    const SizedBox(height: AppDimensions.sm),
+                    
+                    // Description
+                    Text(
+                      _items[_currentIndex].description,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppTheme.textMuted,
+                        height: 1.5,
                       ),
-                      const Spacer(),
-                      
-                      // Next / Start Button
-                      DsButton(
-                        label: _currentIndex == _items.length - 1 ? 'ابدأ الان' : 'التالي',
-                        width: double.infinity,
-                        onPressed: () {
-                          if (_currentIndex == _items.length - 1) {
-                            _completeOnboarding();
-                          } else {
-                            _pageController.nextPage(
-                              duration: const Duration(milliseconds: 400),
-                              curve: Curves.easeInOut,
-                            );
-                          }
-                        },
-                      ),
-                    ],
-                  ),
+                    ),
+                    const Spacer(),
+                    
+                    // Next / Start Button
+                    DsButton(
+                      label: _currentIndex == _items.length - 1 ? 'ابدأ الان' : 'التالي',
+                      width: double.infinity,
+                      onPressed: () {
+                        if (_currentIndex == _items.length - 1) {
+                          _completeOnboarding();
+                        } else {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeInOut,
+                          );
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -176,38 +184,4 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-// Custom Clipper for the Onboarding Wave (pointing upwards)
-class OnboardingWaveClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    var path = Path();
-    // Start at top-left, but lower down
-    path.moveTo(0, 40);
-    
-    // Create a wave that arches upwards
-    var firstControlPoint = Offset(size.width / 4, 0);
-    var firstEndPoint = Offset(size.width / 2.25, 20);
-    path.quadraticBezierTo(
-      firstControlPoint.dx, firstControlPoint.dy, 
-      firstEndPoint.dx, firstEndPoint.dy
-    );
-    
-    var secondControlPoint = Offset(size.width - (size.width / 3.25), 50);
-    var secondEndPoint = Offset(size.width, 10);
-    path.quadraticBezierTo(
-      secondControlPoint.dx, secondControlPoint.dy, 
-      secondEndPoint.dx, secondEndPoint.dy
-    );
-    
-    // Draw the rest of the shape (rectangle at the bottom)
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-    return path;
-  }
 
-  @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) {
-    return false;
-  }
-}

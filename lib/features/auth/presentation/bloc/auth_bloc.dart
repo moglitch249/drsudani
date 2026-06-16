@@ -25,17 +25,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) : super(AuthInitial()) {
 
     on<CheckAuthStatusEvent>((event, emit) async {
+      emit(AuthLoading());
       final user = await getCurrentUserUseCase();
       if (user != null) {
         emit(AuthSuccess(user));
       } else {
-        emit(AuthInitial());
+        emit(AuthUnauthenticated());
       }
     });
 
     on<LogoutEvent>((event, emit) async {
       await logoutUseCase();
-      emit(AuthInitial());
+      emit(AuthUnauthenticated());
     });
 
     on<LoginWithEmailEvent>((event, emit) async {

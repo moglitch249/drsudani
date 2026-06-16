@@ -148,6 +148,57 @@ class _DsProductCardState extends State<DsProductCard> {
                     ),
                   ),
                 ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
+              
+              // Name and Price
+              Positioned(
+                bottom: 8,
+                left: 8,
+                right: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        shadows: [Shadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 1))],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Directionality(
+                      textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            (widget.salePrice > 0 ? widget.salePrice : widget.startingPrice).toStringAsFixed(2),
+                            style: const TextStyle(
+                              color: AppTheme.success,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              shadows: [Shadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 1))],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isAr ? 'ج.س' : 'SDG',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 10,
+                              shadows: [Shadow(color: Colors.black54, blurRadius: 2, offset: Offset(0, 1))],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

@@ -10,6 +10,7 @@ import '../bloc/wallet_cubit.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state_event.dart';
 
+
 class WalletScreen extends StatefulWidget {
   const WalletScreen({Key? key}) : super(key: key);
 
@@ -24,6 +25,7 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   void initState() {
     super.initState();
+    _secureScreen();
     // استخرج التوكن من AuthBloc مباشرة (لا نعتمد على Hive وحده)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authState = context.read<AuthBloc>().state;
@@ -35,8 +37,13 @@ class _WalletScreenState extends State<WalletScreen> {
     });
   }
 
+  Future<void> _secureScreen() async {
+
+  }
+
   @override
   void dispose() {
+
     _scrollController.dispose();
     super.dispose();
   }

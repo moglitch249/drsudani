@@ -11,6 +11,7 @@ class ProductModel {
   final String imageUrl;
   final List<ProductCategory> categories;
   final List<int> variations; // Array of variation IDs for variable products
+  final String stockStatus;
 
   final List<ProductAddon> addons;
   final bool isBotAutoTopup;
@@ -26,6 +27,7 @@ class ProductModel {
     required this.imageUrl,
     required this.categories,
     required this.variations,
+    required this.stockStatus,
     required this.addons,
     required this.isBotAutoTopup,
   });
@@ -92,6 +94,7 @@ class ProductModel {
       imageUrl: imgUrl,
       categories: cats,
       variations: varList,
+      stockStatus: json['stock_status'] ?? 'instock',
       addons: addonsList,
       isBotAutoTopup: isBot,
     );

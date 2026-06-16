@@ -8,6 +8,10 @@
 -keep class io.flutter.embedding.** { *; }
 -dontwarn io.flutter.**
 
+# Keep App Main Activity
+-keep class com.example.drsudani_full.** { *; }
+-keep class com.drsudani.app.** { *; }
+
 # Keep Kotlin metadata
 -keep class kotlin.** { *; }
 -dontwarn kotlin.**

@@ -20,67 +20,90 @@ class OrdersScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    // Get customer ID synchronously from local storage to avoid "login first" error if bloc hasn't emitted yet.
-    final localDs = getIt<AuthLocalDataSource>();
-    int customerId = localDs.getUserId() ?? 0;
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (context, authState) {
+        int customerId = 0;
+        if (authState is AuthSuccess) {
+          customerId = authState.user.id;
+        }
 
-    return BlocProvider(
-      create: (context) => OrdersCubit(
-        apiService: getIt<ApiService>(),
-        customerId: customerId,
-      )..fetchOrders(),
-      child: DefaultTabController(
-        length: 4,
-        child: Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          appBar: AppBar(
-            title: Text(l10n.myOrders, style: const TextStyle(fontWeight: FontWeight.bold)),
-            centerTitle: true,
-            bottom: TabBar(
-              isScrollable: true,
-              indicatorColor: AppTheme.primary,
-              indicatorWeight: 3,
-              dividerColor: Colors.transparent,
-              labelColor: AppTheme.primary,
-              unselectedLabelColor: Theme.of(context).textTheme.bodySmall?.color,
-              tabs: [
-                Tab(text: l10n.all),
-                Tab(text: l10n.pending),
-                Tab(text: l10n.completed),
-                Tab(text: l10n.cancelled),
-              ],
+        return BlocProvider(
+          key: ValueKey(customerId),
+          create: (context) {
+            if (customerId != 0) {
+              return OrdersCubit(
+                apiService: getIt<ApiService>(),
+                customerId: customerId,
+              )..fetchOrders();
+            } else {
+              return OrdersCubit(apiService: getIt<ApiService>(), customerId: 0);
+            }
+          },
+          child: DefaultTabController(
+            length: 4,
+            child: Scaffold(
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              appBar: AppBar(
+                title: Text(l10n.myOrders, style: const TextStyle(fontWeight: FontWeight.bold)),
+                centerTitle: true,
+                bottom: TabBar(
+                  isScrollable: true,
+                  indicatorColor: AppTheme.primary,
+                  indicatorWeight: 3,
+                  dividerColor: Colors.transparent,
+                  labelColor: AppTheme.primary,
+                  unselectedLabelColor: Theme.of(context).textTheme.bodySmall?.color,
+                  tabs: [
+                    Tab(text: l10n.all),
+                    Tab(text: l10n.pending),
+                    Tab(text: l10n.completed),
+                    Tab(text: l10n.cancelled),
+                  ],
+                ),
+              ),
+              body: BlocBuilder<OrdersCubit, OrdersState>(
+                builder: (context, state) {
+                  if (customerId == 0) {
+                    return Center(
+                      child: DsEmptyState(
+                        icon: Icons.lock_outline,
+                        title: 'تسجيل الدخول مطلوب',
+                        subtitle: 'الرجاء تسجيل الدخول لعرض وتتبع طلباتك',
+                        buttonText: 'تسجيل الدخول',
+                        onButtonPressed: () => context.push('/login'),
+                      ),
+                    );
+                  }
+                  if (state is OrdersLoading) {
+                    return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+                  } else if (state is OrdersError) {
+                    return Center(
+                      child: DsEmptyState(
+                        icon: Icons.error_outline,
+                        title: 'خطأ',
+                        subtitle: state.message,
+                        buttonText: l10n.retry,
+                        onButtonPressed: () => context.read<OrdersCubit>().fetchOrders(),
+                      ),
+                    );
+                  } else if (state is OrdersLoaded) {
+                    final allOrders = state.orders;
+                    return TabBarView(
+                      children: [
+                        _OrdersListView(orders: allOrders, l10n: l10n),
+                        _OrdersListView(orders: allOrders.where((o) => o.status == 'pending' || o.status == 'on-hold' || o.status == 'processing').toList(), l10n: l10n),
+                        _OrdersListView(orders: allOrders.where((o) => o.status == 'completed').toList(), l10n: l10n),
+                        _OrdersListView(orders: allOrders.where((o) => o.status == 'cancelled' || o.status == 'refunded' || o.status == 'failed' || o.status == 'trash').toList(), l10n: l10n),
+                      ],
+                    );
+                  }
+                  return const SizedBox();
+                },
+              ),
             ),
           ),
-          body: BlocBuilder<OrdersCubit, OrdersState>(
-            builder: (context, state) {
-              if (state is OrdersLoading) {
-                return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
-              } else if (state is OrdersError) {
-                return Center(
-                  child: DsEmptyState(
-                    icon: Icons.error_outline,
-                    title: 'خطأ',
-                    subtitle: state.message,
-                    buttonText: l10n.retry,
-                    onButtonPressed: () => context.read<OrdersCubit>().fetchOrders(),
-                  ),
-                );
-              } else if (state is OrdersLoaded) {
-                final allOrders = state.orders;
-                return TabBarView(
-                  children: [
-                    _OrdersListView(orders: allOrders, l10n: l10n),
-                    _OrdersListView(orders: allOrders.where((o) => o.status == 'pending' || o.status == 'on-hold' || o.status == 'processing').toList(), l10n: l10n),
-                    _OrdersListView(orders: allOrders.where((o) => o.status == 'completed').toList(), l10n: l10n),
-                    _OrdersListView(orders: allOrders.where((o) => o.status == 'cancelled' || o.status == 'refunded' || o.status == 'failed' || o.status == 'trash').toList(), l10n: l10n),
-                  ],
-                );
-              }
-              return const SizedBox();
-            },
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -125,36 +148,41 @@ class _OrderCard extends StatelessWidget {
   const _OrderCard({Key? key, required this.order, required this.l10n}) : super(key: key);
 
   OrderStatus _mapStatus(String status) {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'completed':
         return OrderStatus.completed;
       case 'cancelled':
-      case 'refunded':
-      case 'failed':
         return OrderStatus.cancelled;
+      case 'refunded':
+        return OrderStatus.refunded;
+      case 'failed':
+        return OrderStatus.failed;
       case 'processing':
         return OrderStatus.processing;
+      case 'on-hold':
+        return OrderStatus.onHold;
       default:
         return OrderStatus.pending;
     }
   }
 
-  String _statusLabel(String status) {
-    switch (status) {
+  String _statusLabel(String status, AppLocalizations l10n) {
+    final isArabic = l10n.locale.languageCode == 'ar';
+    switch (status.toLowerCase()) {
       case 'pending':
-        return 'قيد الانتظار';
+        return isArabic ? 'قيد الانتظار' : 'Pending';
       case 'processing':
-        return 'قيد المعالجة';
+        return isArabic ? 'قيد المعالجة' : 'Processing';
       case 'on-hold':
-        return 'معلق';
+        return isArabic ? 'معلق' : 'On Hold';
       case 'completed':
-        return 'مكتمل';
+        return isArabic ? 'مكتمل' : 'Completed';
       case 'cancelled':
-        return 'ملغي';
+        return isArabic ? 'ملغي' : 'Cancelled';
       case 'refunded':
-        return 'مسترد';
+        return isArabic ? 'مسترد' : 'Refunded';
       case 'failed':
-        return 'فشل';
+        return isArabic ? 'فشل' : 'Failed';
       default:
         return status;
     }
@@ -209,7 +237,7 @@ class _OrderCard extends StatelessWidget {
                 ),
                 DsStatusBadge(
                   status: _mapStatus(order.status),
-                  label: _statusLabel(order.status),
+                  label: _statusLabel(order.status, l10n),
                 ),
               ],
             ),
@@ -296,6 +324,7 @@ class _OrderCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
