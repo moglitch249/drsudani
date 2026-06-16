@@ -88,7 +88,7 @@ if (isset($orderData['line_items'])) {
                 $m_key = strtolower(trim($meta['key']));
                 
                 // استخراج Player ID
-                if ($m_key === 'player id' || $m_key === 'player_id' || strpos($m_key, "\xD8\xA3\xD9\x8A\xD8\xAF\xD9\x8A") !== false) {
+                if ($m_key === 'player id' || $m_key === 'player_id' || $m_key === 'playerid' || strpos($m_key, "\xD8\xA3\xD9\x8A\xD8\xAF\xD9\x8A") !== false) {
                     $has_player_id_meta = true;
                     $item_player_id = trim($meta['value']);
                 }
@@ -110,9 +110,13 @@ if (isset($orderData['line_items'])) {
             $item_razer_diamonds = trim($item['razer_diamonds']);
         }
         
-        if ($has_player_id_meta && !empty($item_player_id)) {
+        $is_bot_product_flag = isset($item['is_bot_product']) && $item['is_bot_product'] === true;
+        
+        if (($has_player_id_meta && !empty($item_player_id)) || $is_bot_product_flag || !empty($item_razer_diamonds)) {
             $has_bot_product = true;
-            $player_id = $item_player_id;
+            if ($has_player_id_meta && !empty($item_player_id)) {
+                $player_id = $item_player_id;
+            }
             $product_name = isset($item['name']) ? $item['name'] : '';
             
             // عدد الجواهر: أولوية لحقل ريزر المخصص، ثم استخراج من الاسم
@@ -127,6 +131,20 @@ if (isset($orderData['line_items'])) {
             }
             
             $store_amount = $product_name; // حفظ الاسم الكامل
+            if ($player_id !== 'UNKNOWN') {
+                break;
+            }
+        }
+    }
+}
+
+// كخيار بديل في الأسوأ، البحث في الميتا داتا العامة للطلب
+if ($player_id === 'UNKNOWN' && isset($orderData['meta_data'])) {
+    foreach ($orderData['meta_data'] as $meta) {
+        $key = strtolower(trim($meta['key']));
+        if ($key === 'player id' || $key === 'player_id' || $key === 'playerid' || strpos($key, "\xD8\xA3\xD9\x8A\xD8\xAF\xD9\x8A") !== false) {
+            $player_id = trim($meta['value']);
+            $has_bot_product = true; // نعتبره منتج بوت طالما وجدنا الأيدي في الطلب
             break;
         }
     }
@@ -136,17 +154,6 @@ if (isset($orderData['line_items'])) {
 if (!$has_bot_product) {
     file_put_contents('webhook_log.txt', date('Y-m-d H:i:s') . " - Ignored Order #{$woo_order_id}: No Player ID metadata found.\n\n", FILE_APPEND);
     die(json_encode(['success' => true, 'message' => 'Ignoring order: No Bot products found in order']));
-}
-
-// كخيار بديل في الأسوأ، البحث في الميتا داتا العامة للطلب
-if ($player_id === 'UNKNOWN' && isset($orderData['meta_data'])) {
-    foreach ($orderData['meta_data'] as $meta) {
-        $key = strtolower(trim($meta['key']));
-        if ($key === 'player id' || $key === 'player_id' || strpos($key, "\xD8\xA3\xD9\x8A\xD8\xAF\xD9\x8A") !== false) {
-            $player_id = trim($meta['value']);
-            break;
-        }
-    }
 }
 
 // رفض تام إذا كان الأيدي غير موجود
