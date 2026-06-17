@@ -11,6 +11,7 @@ abstract class AuthRemoteDataSource {
   Future<UserModel> registerWithEmail(String email, String password, String firstName, String lastName);
   Future<void> requestWhatsAppOtp(String phone);
   Future<UserModel> verifyWhatsAppOtp(String phone, String otp);
+  Future<void> logout(String token);
 }
 
 @LazySingleton(as: AuthRemoteDataSource)
@@ -160,5 +161,12 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<UserModel> verifyWhatsAppOtp(String phone, String otp) async {
     // Requires a custom WooCommerce endpoint handling WhatsApp OTP validation
     throw UnimplementedError('WhatsApp OTP validation not yet defined');
+  }
+
+  @override
+  Future<void> logout(String token) async {
+    try {
+      await apiService.dio.post('/wp-json/drsudani/v1/logout');
+    } catch (_) {}
   }
 }

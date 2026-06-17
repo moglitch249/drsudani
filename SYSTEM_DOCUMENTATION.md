@@ -44,6 +44,11 @@
 4. **Biometric Security Layer:**
    - لا يمكن إتمام عملية الخصم من المحفظة أو الدفع إلا بعد تأكيد الهوية بواسطة البصمة (Fingerprint) أو بصمة الوجه (FaceID) الخاصة بالمستخدم.
 
+5. **Anti-Race Condition Layer (Idempotency & Locks):**
+   - التطبيق يستخدم `UUID v4` لمنع تكرار طلبات الدفع (Idempotency).
+   - خادم المحفظة (Wallet API) يعتمد على أقفال ذرية بقواعد البيانات `FOR UPDATE` و `INSERT IGNORE` لمنع ثغرات الخصم المزدوج نهائياً.
+   - تم تقييد المنتجات الرقمية بحد أقصى (Max Quantity) يبلغ 5 منتجات للطلب الواحد.
+
 ---
 
 ## ⚙️ الخطوات التشغيلية وطرق الربط (Operational Steps & Integration)

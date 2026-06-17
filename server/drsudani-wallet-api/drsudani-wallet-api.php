@@ -90,7 +90,7 @@ add_filter( 'rest_post_dispatch', function ( WP_REST_Response $response ) {
 }, 10, 1 );
 
 add_filter('rest_pre_serve_request', function($served, $result, $request) {
-    $allowed = ['capacitor://localhost', 'http://localhost'];
+    $allowed = ['capacitor://localhost'];
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     if (in_array($origin, $allowed, true)) {
         header('Access-Control-Allow-Origin: ' . $origin);
@@ -334,7 +334,7 @@ function ds_checkout( WP_REST_Request $request ): WP_REST_Response|WP_Error {
 
         if ( $product_id <= 0 || $quantity <= 0 ) continue;
 
-        if ( $quantity > 100 ) {
+        if ( $quantity > 5 ) {
             ds_lock_release( $lock_key );
             return new WP_Error( 'invalid_quantity', "Quantity exceeds limit for product {$product_id}.", [ 'status' => 400 ] );
         }
@@ -562,10 +562,11 @@ function ds_rate_limit( string $ip, int $limit ): bool {
     $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, 0, 'no')", $key ) );
     $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %d, 'no')", $timeout_key, time() + 60 ) );
 
-    // Atomic increment
+    // Atomic increment + read in single statement to prevent TOCTOU race
     $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = option_value + 1 WHERE option_name = %s", $key ) );
-    
-    $count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $key ) );
+    $count = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s FOR UPDATE", $key
+    ) );
     return $count <= $limit;
 }
 

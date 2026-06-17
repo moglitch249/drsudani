@@ -4,8 +4,12 @@ import 'package:dio/dio.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 class AuthInterceptor extends Interceptor {
-  // مفتاح التطبيق السري (يجب أن يتطابق مع DS_APP_SECRET في السيرفر)
-  final String _appSecret = 'DrSudaniAppSec2026x9k2P';
+  // App Secret — يُمرر عند البناء: flutter build --dart-define=DS_APP_SECRET=xxx
+  // القيمة الافتراضية للتطوير فقط — في الإنتاج يجب تمريرها عبر --dart-define
+  static const String _appSecret = String.fromEnvironment(
+    'DS_APP_SECRET',
+    defaultValue: 'DrSudaniAppSec2026x9k2P',
+  );
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {

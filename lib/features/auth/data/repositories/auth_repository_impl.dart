@@ -48,13 +48,9 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final token = Hive.box('auth').get('jwtToken');
       if (token != null) {
-        await Dio().post(
-          'https://drsudani.com/wp-json/drsudani/v1/logout',
-          options: Options(headers: {
-            'Authorization': 'Bearer $token',
-            'X-App-Secret': 'DrSudaniAppSec2026x9k2P',
-          }),
-        );
+        // استخدام الـ Dio المُعد مسبقاً بدلاً من إنشاء واحد جديد بدون interceptors
+        // هذا يضمن إرسال كل الهيدرز الأمنية (App-Secret, HMAC, etc.)
+        await remoteDataSource.logout(token.toString());
       }
     } catch (_) {}
     await localDataSource.clearToken();

@@ -206,7 +206,7 @@ class _AppLifecycleManagerState extends State<AppLifecycleManager> with WidgetsB
                                   content: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Text('بشكل افتراضي: 0000', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                      const Text('أدخل الرمز الخاص بك لفتح التطبيق', style: TextStyle(fontSize: 12, color: Colors.grey)),
                                       const SizedBox(height: 10),
                                       TextField(
                                         keyboardType: TextInputType.number,
@@ -220,8 +220,14 @@ class _AppLifecycleManagerState extends State<AppLifecycleManager> with WidgetsB
                                         onChanged: (val) {
                                           pin = val;
                                           if (pin.length == 4) {
-                                            // في المستقبل يمكن ربطها مع Hive('settings')
-                                            if (pin == '0000') {
+                                            // Read dynamic PIN from secure storage
+                                            final secureStorage = const FlutterSecureStorage();
+                                            final storedPin = await secureStorage.read(key: 'app_lock_pin');
+                                            
+                                            // Fallback for development if not set, but in production this should be enforced
+                                            final validPin = storedPin ?? '0000';
+                                            
+                                            if (pin == validPin) {
                                               Navigator.pop(context);
                                               setState(() => _isLocked = false);
                                             } else {

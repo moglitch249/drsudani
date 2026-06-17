@@ -14,6 +14,7 @@ import '../../../profile/presentation/bloc/wallet_cubit.dart';
 import '../../../../core/l10n/app_localizations.dart';
 
 import '../../data/models/checkout_item_model.dart';
+import 'package:uuid/uuid.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final CheckoutItem item;
@@ -140,7 +141,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (authState is AuthSuccess) {
         userId = authState.user.id.toString();
       }
-      final idempotencyKey = '${DateTime.now().millisecondsSinceEpoch}_$userId';
+      final String userIdString = userId.toString();
+      final idempotencyKey = '${const Uuid().v4()}_$userIdString';
 
       final response = await getIt<ApiService>().createSecureCheckout(
         orderData, 
