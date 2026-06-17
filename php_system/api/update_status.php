@@ -41,6 +41,11 @@ if (!$id || !$status) {
 }
 
 try {
+    $allowed_statuses = ['processing', 'completed', 'failed', 'manual_review', 'stuck', 'pending'];
+    if (!in_array($status, $allowed_statuses, true)) {
+        http_response_code(400); die(json_encode(array('error' => 'Invalid status')));
+    }
+
     $pdo->beginTransaction();
 
     // 1. جلب الحالة الحالية مع قفل الصف لمنع Race Condition

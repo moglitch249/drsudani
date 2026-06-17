@@ -81,7 +81,7 @@ try {
                     checkout_clicked = 0,
                     requires_human = 0,
                     financial_risk = 'none'
-                WHERE id = ?
+                WHERE id = ? AND status != 'completed' AND status != 'processing'
             ");
             $success_message = 'تمت إعادته لطابور الانتظار، سيحاول البوت شحنه قريباً.';
             // لا نُحدّث WooCommerce عند إعادة المحاولة - الطلب لا يزال قيد المعالجة
